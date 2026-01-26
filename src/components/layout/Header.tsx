@@ -1,6 +1,8 @@
-import { Bell, Search, User } from "lucide-react";
+import { Bell, Search, User, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/auth/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +18,14 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6">
       <div>
@@ -51,18 +61,21 @@ export function Header({ title, subtitle }: HeaderProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              {user?.name || "Minha Conta"}
+              {user?.email && (
+                <p className="font-normal text-xs text-muted-foreground">{user.email}</p>
+              )}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Perfil</DropdownMenuItem>
             <DropdownMenuItem>Configurações</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="text-loss cursor-pointer"
-              onClick={() => {
-                const event = new CustomEvent("logout");
-                window.dispatchEvent(event);
-              }}
+              onClick={handleLogout}
             >
+              <LogOut className="mr-2 h-4 w-4" />
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
