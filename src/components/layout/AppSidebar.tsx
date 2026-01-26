@@ -11,6 +11,8 @@ import {
   Route,
   ChevronLeft,
   ChevronRight,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,15 +29,93 @@ const navigation = [
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+
+  // Close mobile sidebar when route changes
+  const closeMobile = () => setMobileOpen(false);
+
+  return (
+    <>
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-4 left-4 z-40 p-2 rounded-lg bg-card border shadow-sm"
+        aria-label="Abrir menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50 animate-fade-in"
+          onClick={closeMobile}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out",
+          // Desktop styles
+          "hidden lg:flex",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        <SidebarContent collapsed={collapsed} onNavigate={closeMobile} />
+        
+        {/* Collapse Button */}
+        <div className="p-2 border-t border-sidebar-border">
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="flex items-center justify-center w-full py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-5 w-5" />
+            ) : (
+              <>
+                <ChevronLeft className="h-5 w-5 mr-2" />
+                <span className="text-sm">Recolher</span>
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile sidebar */}
+      <aside
+        className={cn(
+          "lg:hidden fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {/* Close button */}
+        <button
+          onClick={closeMobile}
+          className="absolute top-4 right-4 p-1 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+          aria-label="Fechar menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <SidebarContent collapsed={false} onNavigate={closeMobile} />
+      </aside>
+    </>
+  );
+}
+
+interface SidebarContentProps {
+  collapsed: boolean;
+  onNavigate?: () => void;
+}
+
+function SidebarContent({ collapsed, onNavigate }: SidebarContentProps) {
   const location = useLocation();
 
   return (
-    <aside
-      className={cn(
-        "flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out",
-        collapsed ? "w-16" : "w-64"
-      )}
-    >
+    <>
       {/* Logo */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
         {!collapsed && (
@@ -61,6 +141,7 @@ export function AppSidebar() {
             <NavLink
               key={item.name}
               to={item.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
@@ -74,23 +155,6 @@ export function AppSidebar() {
           );
         })}
       </nav>
-
-      {/* Collapse Button */}
-      <div className="p-2 border-t border-sidebar-border">
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center justify-center w-full py-2 rounded-lg text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-5 w-5" />
-          ) : (
-            <>
-              <ChevronLeft className="h-5 w-5 mr-2" />
-              <span className="text-sm">Recolher</span>
-            </>
-          )}
-        </button>
-      </div>
-    </aside>
+    </>
   );
 }
