@@ -56,7 +56,15 @@ export function Header({ title, subtitle }: HeaderProps) {
             <DropdownMenuItem>Perfil</DropdownMenuItem>
             <DropdownMenuItem>Configurações</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-loss">Sair</DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-loss cursor-pointer"
+              onClick={() => {
+                const event = new CustomEvent("logout");
+                window.dispatchEvent(event);
+              }}
+            >
+              Sair
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
