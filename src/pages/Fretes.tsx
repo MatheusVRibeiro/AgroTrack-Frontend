@@ -118,6 +118,25 @@ interface Custo {
   tipoCombustivel?: "gasolina" | "diesel" | "etanol" | "gnv";
 }
 
+interface NotaFiscal {
+  id: string;
+  freteId: string;
+  numeroNf: string;
+  serieNf: string;
+  dataEmissao: string;
+  dataSaida?: string;
+  dataEntrega?: string;
+  status: "emitida" | "cancelada" | "devolvida";
+  chaveAcesso?: string;
+  valorBruto: number;
+  icmsAliquota: number;
+  icmsValor: number;
+  valorLiquido: number;
+  arquivoPdf?: string;
+  arquivoXml?: string;
+  observacoes?: string;
+}
+
 const fretesData: Frete[] = [
   {
     id: "FRETE-2026-001",
@@ -352,6 +371,95 @@ const custosData: Custo[] = [
     rota: "São Paulo → Rio de Janeiro",
     litros: 280,
     tipoCombustivel: "diesel",
+  },
+];
+
+// Dados demo de notas fiscais
+const notasFiscaisData: NotaFiscal[] = [
+  {
+    id: "NF-2026-001",
+    freteId: "FRETE-2026-001",
+    numeroNf: "1001",
+    serieNf: "1",
+    dataEmissao: "20/01/2026",
+    dataSaida: "2026-01-20T06:30",
+    dataEntrega: "2026-01-20T14:45",
+    status: "emitida",
+    chaveAcesso: "35260193151816000160550010001001001234567890",
+    valorBruto: 7600,
+    icmsAliquota: 18,
+    icmsValor: 1368,
+    valorLiquido: 6232,
+    arquivoPdf: "/docs/nf/NF-2026-001.pdf",
+    observacoes: "Frete realizado conforme contrato. Carga verificada.",
+  },
+  {
+    id: "NF-2026-002",
+    freteId: "FRETE-2026-002",
+    numeroNf: "1002",
+    serieNf: "1",
+    dataEmissao: "18/01/2026",
+    dataSaida: "2026-01-18T07:00",
+    dataEntrega: "2026-01-18T15:20",
+    status: "emitida",
+    chaveAcesso: "35260193151816000160550010001002001234567891",
+    valorBruto: 7600,
+    icmsAliquota: 18,
+    icmsValor: 1368,
+    valorLiquido: 6232,
+    arquivoPdf: "/docs/nf/NF-2026-002.pdf",
+    observacoes: "Produto de qualidade premium. Entrega no horário.",
+  },
+  {
+    id: "NF-2026-003",
+    freteId: "FRETE-2026-003",
+    numeroNf: "1003",
+    serieNf: "1",
+    dataEmissao: "15/01/2026",
+    dataSaida: "2026-01-15T06:00",
+    dataEntrega: "2026-01-15T13:30",
+    status: "emitida",
+    chaveAcesso: "35260193151816000160550010001003001234567892",
+    valorBruto: 7500,
+    icmsAliquota: 18,
+    icmsValor: 1350,
+    valorLiquido: 6150,
+    arquivoPdf: "/docs/nf/NF-2026-003.pdf",
+    observacoes: "Rota executada sem incidentes.",
+  },
+  {
+    id: "NF-2026-004",
+    freteId: "FRETE-2026-004",
+    numeroNf: "1004",
+    serieNf: "1",
+    dataEmissao: "12/01/2026",
+    dataSaida: "2026-01-12T08:00",
+    dataEntrega: "2026-01-12T18:15",
+    status: "emitida",
+    chaveAcesso: "35260193151816000160550010001004001234567893",
+    valorBruto: 7500,
+    icmsAliquota: 18,
+    icmsValor: 1350,
+    valorLiquido: 6150,
+    arquivoPdf: "/docs/nf/NF-2026-004.pdf",
+    observacoes: "Produto com certificação especial.",
+  },
+  {
+    id: "NF-2026-005",
+    freteId: "FRETE-2026-005",
+    numeroNf: "1005",
+    serieNf: "1",
+    dataEmissao: "10/01/2026",
+    dataSaida: "2026-01-10T05:30",
+    dataEntrega: "2026-01-10T14:00",
+    status: "emitida",
+    chaveAcesso: "35260193151816000160550010001005001234567894",
+    valorBruto: 8400,
+    icmsAliquota: 18,
+    icmsValor: 1512,
+    valorLiquido: 6888,
+    arquivoPdf: "/docs/nf/NF-2026-005.pdf",
+    observacoes: "Frete de retorno com carga completa.",
   },
 ];
 
@@ -1361,6 +1469,136 @@ export default function Fretes() {
                   );
                 })()}
               </div>
+
+              <Separator />
+
+              {/* Notas Fiscais */}
+              <div>
+                <h4 className="font-semibold mb-4">Documentação Fiscal</h4>
+                {(() => {
+                  const nfsDoFrete = notasFiscaisData.filter(nf => nf.freteId === selectedFrete.id);
+                  
+                  if (nfsDoFrete.length === 0) {
+                    return (
+                      <Card className="p-6 border-dashed border-2 bg-muted/30">
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <AlertCircle className="h-8 w-8 text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">Nenhuma nota fiscal registrada para este frete</p>
+                        </div>
+                      </Card>
+                    );
+                  }
+                  
+                  return (
+                    <div className="space-y-3">
+                      {nfsDoFrete.map((nf) => (
+                        <Card key={nf.id} className="p-4 hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+                          <div className="space-y-3">
+                            {/* Header: NF Info */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-950 flex items-center justify-center">
+                                    <FileDown className="h-4 w-4 text-blue-600" />
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-lg">{nf.numeroNf}/{nf.serieNf}</p>
+                                    <p className="text-xs text-muted-foreground">{nf.dataEmissao}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <Badge className={`${
+                                nf.status === 'emitida' 
+                                  ? 'bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300'
+                                  : nf.status === 'cancelada'
+                                  ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-300'
+                                  : 'bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-300'
+                              }`}>
+                                {nf.status === 'emitida' ? '✓ Emitida' : nf.status === 'cancelada' ? '✗ Cancelada' : '⟲ Devolvida'}
+                              </Badge>
+                            </div>
+
+                            {/* Chave de Acesso */}
+                            {nf.chaveAcesso && (
+                              <div className="bg-slate-50 dark:bg-slate-900/40 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Chave de Acesso</p>
+                                <p className="font-mono text-xs break-all text-foreground">{nf.chaveAcesso}</p>
+                              </div>
+                            )}
+
+                            {/* Datas de Saída e Entrega */}
+                            {(nf.dataSaida || nf.dataEntrega) && (
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                {nf.dataSaida && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Saída</p>
+                                    <p className="font-semibold">{new Date(nf.dataSaida).toLocaleString('pt-BR')}</p>
+                                  </div>
+                                )}
+                                {nf.dataEntrega && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Entrega</p>
+                                    <p className="font-semibold">{new Date(nf.dataEntrega).toLocaleString('pt-BR')}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Valores */}
+                            <div className="grid grid-cols-3 gap-2 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/40 dark:to-slate-800/40 p-3 rounded-lg">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Valor Bruto</p>
+                                <p className="font-bold text-blue-600 dark:text-blue-400">R$ {nf.valorBruto.toLocaleString('pt-BR')}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">ICMS ({nf.icmsAliquota}%)</p>
+                                <p className="font-bold text-red-600 dark:text-red-400">-R$ {nf.icmsValor.toLocaleString('pt-BR')}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Valor Líquido</p>
+                                <p className="font-bold text-green-600 dark:text-green-400">R$ {nf.valorLiquido.toLocaleString('pt-BR')}</p>
+                              </div>
+                            </div>
+
+                            {/* Arquivos */}
+                            <div className="flex gap-2">
+                              {nf.arquivoPdf && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="flex-1 gap-2"
+                                  onClick={() => window.open(nf.arquivoPdf, '_blank')}
+                                >
+                                  <FileDown className="h-4 w-4" />
+                                  PDF
+                                </Button>
+                              )}
+                              {nf.chaveAcesso && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="flex-1 gap-2"
+                                  onClick={() => toast.info('Recurso de consulta SEFAZ em implementação')}
+                                >
+                                  🔍 Consultar
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Observações */}
+                            {nf.observacoes && (
+                              <div className="text-xs text-muted-foreground border-t pt-2">
+                                <p className="font-semibold mb-1">Observações:</p>
+                                <p>{nf.observacoes}</p>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </>
           )}
           </div>
@@ -1637,6 +1875,38 @@ export default function Fretes() {
                   </Card>
                 )}
               </div>
+
+              {/* Seção: Documentação Fiscal */}
+              {!isEditingFrete && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-1 rounded-full bg-blue-600" />
+                    <h3 className="font-semibold text-blue-600">Nota Fiscal (Opcional)</h3>
+                  </div>
+                  <Card className="p-4 border-l-4 border-l-blue-500 bg-blue-50 dark:bg-blue-950/20">
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-sm font-semibold">Número da Nota Fiscal</Label>
+                        <Input 
+                          placeholder="Ex: 1001"
+                          className="mt-1"
+                          disabled
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Será gerado automaticamente após criação do frete</p>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        <p className="font-semibold text-foreground mb-1">ℹ️ Informações:</p>
+                        <ul className="list-disc list-inside space-y-1 text-xs">
+                          <li>A nota fiscal será criada automaticamente ao salvar o frete</li>
+                          <li>Valor bruto: R$ (toneladas × valor por tonelada)</li>
+                          <li>ICMS: 18% (alíquota padrão)</li>
+                          <li>Você pode gerenciar a documentação fiscal nos detalhes do frete</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              )}
             </div>
           </div>
 

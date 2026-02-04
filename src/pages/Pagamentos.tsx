@@ -57,6 +57,24 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+/**
+ * Página de Pagamentos - Gestão de Pagamentos Semanais aos Motoristas
+ * 
+ * FLUXO DE PAGAMENTO SEMANAL:
+ * 1. Ao criar novo pagamento, seleciona-se o motorista
+ * 2. Sistema busca automaticamente apenas fretes NÃO PAGOS daquele motorista
+ *    (onde pagamentoId === null)
+ * 3. Usuário seleciona quais fretes incluir no pagamento semanal
+ * 4. Sistema calcula: receita bruta - custos = valor líquido a pagar
+ * 5. Ao salvar pagamento, os fretes selecionados são vinculados (recebem pagamentoId)
+ * 6. Fretes pagos não aparecem mais na lista de disponíveis
+ * 
+ * INTEGRAÇÃO COM BANCO:
+ * - Campo pagamentoId na tabela fretes (FK para pagamentos)
+ * - Trigger atualiza pagamentoId nos fretes quando pagamento é criado
+ * - Query: SELECT * FROM fretes WHERE motorista_id = ? AND pagamento_id IS NULL
+ */
+
 interface PagamentoMotorista {
   id: string;
   motoristaId: string;
@@ -129,12 +147,19 @@ const fretesData: {
   rota: string;
   toneladas: number;
   valorGerado: number;
+  pagamentoId: string | null; // null = frete não pago ainda
 }[] = [
-  { id: "F001", motoristaId: "1", dataFrete: "15/01/2025", rota: "SP → RJ", toneladas: 35, valorGerado: 5250 },
-  { id: "F002", motoristaId: "1", dataFrete: "20/01/2025", rota: "SP → MG", toneladas: 50, valorGerado: 7500 },
-  { id: "F003", motoristaId: "2", dataFrete: "18/01/2025", rota: "RJ → ES", toneladas: 45, valorGerado: 6750 },
-  { id: "F004", motoristaId: "3", dataFrete: "17/01/2025", rota: "PR → SC", toneladas: 40, valorGerado: 6000 },
-  { id: "F005", motoristaId: "4", dataFrete: "19/01/2025", rota: "MG → DF", toneladas: 55, valorGerado: 8250 },
+  { id: "F001", motoristaId: "1", dataFrete: "15/01/2025", rota: "SP → RJ", toneladas: 35, valorGerado: 5250, pagamentoId: "PAG-2026-001" },
+  { id: "F002", motoristaId: "1", dataFrete: "20/01/2025", rota: "SP → MG", toneladas: 50, valorGerado: 7500, pagamentoId: "PAG-2026-001" },
+  { id: "F003", motoristaId: "2", dataFrete: "18/01/2025", rota: "RJ → ES", toneladas: 45, valorGerado: 6750, pagamentoId: "PAG-2026-002" },
+  { id: "F004", motoristaId: "3", dataFrete: "17/01/2025", rota: "PR → SC", toneladas: 40, valorGerado: 6000, pagamentoId: "PAG-2026-003" },
+  { id: "F005", motoristaId: "4", dataFrete: "19/01/2025", rota: "MG → DF", toneladas: 55, valorGerado: 8250, pagamentoId: "PAG-2026-004" },
+  // Fretes não pagos (para demonstrar o fluxo semanal)
+  { id: "F006", motoristaId: "1", dataFrete: "28/01/2026", rota: "SP → RJ", toneladas: 42, valorGerado: 6300, pagamentoId: null },
+  { id: "F007", motoristaId: "1", dataFrete: "30/01/2026", rota: "MG → SP", toneladas: 38, valorGerado: 5700, pagamentoId: null },
+  { id: "F008", motoristaId: "2", dataFrete: "29/01/2026", rota: "RJ → MG", toneladas: 50, valorGerado: 7500, pagamentoId: null },
+  { id: "F009", motoristaId: "3", dataFrete: "27/01/2026", rota: "PR → RS", toneladas: 45, valorGerado: 6750, pagamentoId: null },
+  { id: "F010", motoristaId: "5", dataFrete: "31/01/2026", rota: "DF → GO", toneladas: 48, valorGerado: 7200, pagamentoId: null },
 ];
 
 // Dados de custos adicionais para cada frete
@@ -370,6 +395,14 @@ export default function Pagamentos() {
       metodoPagamento: motorista?.tipoPagamento || "pix",
     });
   };
+
+  // Buscar fretes não pagos do motorista selecionado
+  const fretesNaoPagos = useMemo(() => {
+    if (!editedPagamento.motoristaId) return [];
+    return fretesData.filter(
+      (f) => f.motoristaId === editedPagamento.motoristaId && f.pagamentoId === null
+    );
+  }, [editedPagamento.motoristaId]);
 
   const handleToggleFrete = (freteId: string) => {
     const isSelected = selectedFretes.includes(freteId);
@@ -921,10 +954,6 @@ export default function Pagamentos() {
     .filter((p) => p.statusPagamento === "pago")
     .reduce((acc, p) => acc + p.valorTotal, 0);
 
-  const fretesDisponiveis = editedPagamento.motoristaId
-    ? fretesData.filter((f) => f.motoristaId === editedPagamento.motoristaId)
-    : [];
-
   const motoristaSelecionado = editedPagamento.motoristaId
     ? motoristas.find((m) => m.id === editedPagamento.motoristaId)
     : undefined;
@@ -1472,36 +1501,76 @@ export default function Pagamentos() {
             {/* Seleção de Fretes */}
             {editedPagamento.motoristaId && (
               <div className="space-y-3">
-                <Label>Selecione os fretes para pagamento *</Label>
-                {fretesDisponiveis.length === 0 ? (
-                  <Card className="p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900 flex items-center gap-3">
-                    <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum frete disponível para este motorista
+                <div className="flex items-center justify-between">
+                  <Label>Selecione os fretes para pagamento *</Label>
+                  {fretesNaoPagos.length > 0 && (
+                    <Badge className="bg-gradient-to-r from-blue-300 to-blue-400 text-slate-900 border-0">
+                      {fretesNaoPagos.length} frete{fretesNaoPagos.length > 1 ? 's' : ''} aguardando
+                    </Badge>
+                  )}
+                </div>
+                {fretesNaoPagos.length === 0 ? (
+                  <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-900 flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      Este motorista não possui fretes pendentes de pagamento
                     </p>
                   </Card>
                 ) : (
                   <div className="space-y-2">
-                    {fretesDisponiveis.map((frete) => (
-                      <Card key={frete.id} className="p-3">
+                    {fretesNaoPagos.map((frete) => (
+                      <Card 
+                        key={frete.id} 
+                        className={cn(
+                          "p-4 cursor-pointer transition-all border-2 backdrop-blur-sm",
+                          selectedFretes.includes(frete.id)
+                            ? "border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 shadow-md shadow-blue-200 dark:shadow-blue-900"
+                            : "border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm"
+                        )}
+                      >
                         <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 flex-1">
                             <Checkbox
                               id={`frete-${frete.id}`}
                               checked={selectedFretes.includes(frete.id)}
                               onCheckedChange={() => handleToggleFrete(frete.id)}
+                              className="h-5 w-5"
                             />
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {frete.id} • {frete.rota}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {frete.dataFrete} • {frete.toneladas}t
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                  {frete.id}
+                                </p>
+                                <span className="text-slate-400 dark:text-slate-500">•</span>
+                                <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                                  {frete.rota}
+                                </p>
+                                <Badge className="bg-gradient-to-r from-amber-300 to-orange-300 text-amber-800 text-xs border-0 ml-auto">
+                                  Aguardando
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                📅 {frete.dataFrete} • 📦 {frete.toneladas} toneladas
                               </p>
                             </div>
                           </div>
-                          <div className="text-sm font-semibold text-profit">
-                            R$ {frete.valorGerado.toLocaleString("pt-BR")}
+                          <div className="flex flex-col items-end gap-2 min-w-max">
+                            <div className={cn(
+                              "text-base font-bold px-3 py-1 rounded-lg",
+                              selectedFretes.includes(frete.id)
+                                ? "bg-gradient-to-r from-emerald-400 to-green-400 text-white"
+                                : "text-emerald-600"
+                            )}>
+                              R$ {frete.valorGerado.toLocaleString("pt-BR")}
+                            </div>
+                            <p className={cn(
+                              "text-xs font-semibold px-2 py-1 rounded",
+                              selectedFretes.includes(frete.id)
+                                ? "bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200"
+                                : "text-slate-400 dark:text-slate-500"
+                            )}>
+                              {selectedFretes.includes(frete.id) ? "✓ Selecionado" : "○ Não selecionado"}
+                            </p>
                           </div>
                         </div>
                       </Card>
@@ -1530,11 +1599,11 @@ export default function Pagamentos() {
                 </div>
               </Card>
             ) : (
-              editedPagamento.motoristaId && fretesDisponiveis.length === 0 && (
+              editedPagamento.motoristaId && fretesNaoPagos.length === 0 && (
                 <Card className="p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900 flex items-center gap-3">
                   <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
                   <p className="text-sm text-muted-foreground">
-                    Nenhum frete encontrado para este motorista no período
+                    Este motorista não possui fretes pendentes de pagamento
                   </p>
                 </Card>
               )
@@ -1546,33 +1615,34 @@ export default function Pagamentos() {
             {selectedFretes.length > 0 && (
               <div className="space-y-4">
                 {/* Detalhamento por Frete */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Detalhamento de Custos por Frete</Label>
+                <div className="space-y-3 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/40 dark:to-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Detalhamento de Custos por Frete</p>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {fretesDisponiveis
+                    {fretesNaoPagos
                       .filter((f) => selectedFretes.includes(f.id))
                       .map((frete) => {
                         const custosFrete = custosAdicionaisData.filter((c) => c.freteId === frete.id);
                         const totalCustos = custosFrete.reduce((sum, c) => sum + c.valor, 0);
                         const valorLiquido = frete.valorGerado - totalCustos;
                         return (
-                          <Card key={frete.id} className="p-3 bg-muted/50">
+                          <Card key={frete.id} className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors">
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold">{frete.id} • {frete.rota}</p>
+                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{frete.id}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{frete.rota}</p>
                                 <div className="text-right">
-                                  <p className="text-xs text-muted-foreground">Bruto</p>
-                                  <p className="text-sm font-semibold text-blue-600">
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Bruto</p>
+                                  <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
                                     R$ {frete.valorGerado.toLocaleString("pt-BR")}
                                   </p>
                                 </div>
                               </div>
                               {custosFrete.length > 0 && (
-                                <div className="border-t pt-2 pl-2 space-y-1">
+                                <div className="border-t border-slate-200 dark:border-slate-700 pt-2 pl-2 space-y-1">
                                   {custosFrete.map((custo, idx) => (
                                     <div key={idx} className="flex items-center justify-between text-xs">
-                                      <span className="text-muted-foreground">- {custo.descricao}</span>
-                                      <span className="text-loss font-semibold">
+                                      <span className="text-slate-600 dark:text-slate-400">📌 {custo.descricao}</span>
+                                      <span className="font-semibold text-red-600 dark:text-red-400">
                                         -R$ {custo.valor.toLocaleString("pt-BR")}
                                       </span>
                                     </div>
@@ -1580,11 +1650,9 @@ export default function Pagamentos() {
                                 </div>
                               )}
                               {totalCustos > 0 && (
-                                <div className="flex items-center justify-between border-t pt-2">
-                                  <span className="text-xs font-semibold text-muted-foreground">Líquido</span>
-                                  <span className="text-sm font-bold text-profit">
-                                    R$ {valorLiquido.toLocaleString("pt-BR")}
-                                  </span>
+                                <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 bg-emerald-50 dark:bg-emerald-950/30 -mx-3 px-3 py-2 rounded">
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Líquido do Frete</span>
+                                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">R$ {valorLiquido.toLocaleString("pt-BR")}</span>
                                 </div>
                               )}
                             </div>
@@ -1597,132 +1665,144 @@ export default function Pagamentos() {
                 <Separator />
 
                 {/* Resumo Final de Valores */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs">Valor Bruto</Label>
-                    <Card className="p-3 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-                      <p className="text-lg font-bold text-blue-600">
-                        R$ {fretesDisponiveis
-                          .filter((f) => selectedFretes.includes(f.id))
-                          .reduce((acc, f) => acc + f.valorGerado, 0)
-                          .toLocaleString("pt-BR")}
-                      </p>
-                    </Card>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Total de Descontos</Label>
-                    <Card className="p-3 bg-loss/10 border-loss/20">
-                      <p className="text-lg font-bold text-loss">
-                        -R$ {selectedFretes
-                          .reduce((acc, freteId) => {
-                            return (
-                              acc +
-                              custosAdicionaisData
-                                .filter((c) => c.freteId === freteId)
-                                .reduce((sum, c) => sum + c.valor, 0)
-                            );
-                          }, 0)
-                          .toLocaleString("pt-BR")}
-                      </p>
-                    </Card>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Valor a Pagar</Label>
-                    <Card className="p-3 bg-profit/10 border-profit/20">
-                      <p className="text-lg font-bold text-profit">
-                        R$ {(editedPagamento.valorTotal || 0).toLocaleString("pt-BR")}
-                      </p>
-                    </Card>
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/40 dark:to-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-3">Resumo Financeiro</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-600 dark:text-slate-400">Valor Bruto</Label>
+                      <Card className="p-4 bg-gradient-to-br from-blue-300 to-blue-400 text-slate-900 border-0 shadow-lg">
+                        <p className="text-2xl font-bold">
+                          R$ {fretesNaoPagos
+                            .filter((f) => selectedFretes.includes(f.id))
+                            .reduce((acc, f) => acc + f.valorGerado, 0)
+                            .toLocaleString("pt-BR")}
+                        </p>
+                        <p className="text-xs text-blue-100 mt-1">Receita dos fretes</p>
+                      </Card>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-600 dark:text-slate-400">Total de Descontos</Label>
+                      <Card className="p-4 bg-gradient-to-br from-red-300 to-red-400 text-slate-900 border-0 shadow-lg">
+                        <p className="text-2xl font-bold">
+                          -R$ {selectedFretes
+                            .reduce((acc, freteId) => {
+                              return (
+                                acc +
+                                custosAdicionaisData
+                                  .filter((c) => c.freteId === freteId)
+                                  .reduce((sum, c) => sum + c.valor, 0)
+                              );
+                            }, 0)
+                            .toLocaleString("pt-BR")}
+                        </p>
+                        <p className="text-xs text-red-100 mt-1">Combustível, pedágio, etc</p>
+                      </Card>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-slate-600 dark:text-slate-400">Valor a Pagar</Label>
+                      <Card className="p-4 bg-gradient-to-br from-emerald-300 to-emerald-400 text-slate-900 border-0 shadow-lg">
+                        <p className="text-2xl font-bold">
+                          R$ {(editedPagamento.valorTotal || 0).toLocaleString("pt-BR")}
+                        </p>
+                        <p className="text-xs text-emerald-100 mt-1">Líquido ao motorista</p>
+                      </Card>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Valor por Tonelada (Calculado)</Label>
-                  <Card className="p-3 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-900">
-                    <p className="text-2xl font-bold text-purple-600">
-                      R$ {(editedPagamento.valorUnitarioPorTonelada || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {editedPagamento.toneladas.toFixed(2)}t • Já com descontos de custos
-                    </p>
-                  </Card>
-                </div>
+                <Card className="p-5 bg-gradient-to-br from-purple-300 to-indigo-300 text-slate-900 border-0 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-slate-700 font-semibold mb-1">Valor Unitário por Tonelada</p>
+                      <p className="text-3xl font-bold">
+                        R$ {(editedPagamento.valorUnitarioPorTonelada || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-xs text-slate-700 mt-2">
+                        📊 {editedPagamento.toneladas.toFixed(2)}t • Já com descontos incluídos
+                      </p>
+                    </div>
+                    <DollarSign className="h-12 w-12 text-slate-400 opacity-50" />
+                  </div>
+                </Card>
               </div>
             )}
 
             <Separator />
 
-            {/* Data do Pagamento */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Data do Pagamento *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal gap-2 px-3 h-10"
-                    >
-                      <Calendar className="h-4 w-4 text-primary" />
-                      {editedPagamento.dataPagamento
-                        ? new Date(
-                            editedPagamento.dataPagamento.split("/").reverse().join("-")
-                          ).toLocaleDateString("pt-BR")
-                        : "Selecione a data"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 align-start" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={
-                        editedPagamento.dataPagamento
+            {/* Data do Pagamento e Status */}
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900/40 dark:to-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-4">Informações do Pagamento</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">📅 Data do Pagamento *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal gap-2 px-3 h-11 border-2 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors"
+                      >
+                        <Calendar className="h-4 w-4 text-blue-600" />
+                        {editedPagamento.dataPagamento
                           ? new Date(
                               editedPagamento.dataPagamento.split("/").reverse().join("-")
-                            )
-                          : undefined
-                      }
-                      onSelect={(date) => {
-                        if (date) {
-                          const formattedDate = date.toLocaleDateString("pt-BR");
-                          setEditedPagamento({
-                            ...editedPagamento,
-                            dataPagamento: formattedDate,
-                          });
+                            ).toLocaleDateString("pt-BR")
+                          : "Selecione a data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 align-start" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={
+                          editedPagamento.dataPagamento
+                            ? new Date(
+                                editedPagamento.dataPagamento.split("/").reverse().join("-")
+                              )
+                            : undefined
                         }
-                      }}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date("2025-01-01")
-                      }
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="statusPagamento">Status *</Label>
-                <Select
-                  value={editedPagamento.statusPagamento || "pendente"}
-                  onValueChange={(value: "pendente" | "processando" | "pago" | "cancelado") =>
-                    setEditedPagamento({
-                      ...editedPagamento,
-                      statusPagamento: value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                    <SelectItem value="processando">Processando</SelectItem>
-                    <SelectItem value="pago">Pago</SelectItem>
-                    <SelectItem value="cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
+                        onSelect={(date) => {
+                          if (date) {
+                            const formattedDate = date.toLocaleDateString("pt-BR");
+                            setEditedPagamento({
+                              ...editedPagamento,
+                              dataPagamento: formattedDate,
+                            });
+                          }
+                        }}
+                        disabled={(date) =>
+                          date > new Date() || date < new Date("2025-01-01")
+                        }
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="statusPagamento" className="text-sm font-semibold">📌 Status *</Label>
+                  <Select
+                    value={editedPagamento.statusPagamento || "pendente"}
+                    onValueChange={(value: "pendente" | "processando" | "pago" | "cancelado") =>
+                      setEditedPagamento({
+                        ...editedPagamento,
+                        statusPagamento: value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="border-2 hover:border-blue-400 transition-colors h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pendente">⏳ Pendente</SelectItem>
+                      <SelectItem value="processando">⚙️ Processando</SelectItem>
+                      <SelectItem value="pago">✓ Pago</SelectItem>
+                      <SelectItem value="cancelado">✗ Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
             {/* Método de Pagamento */}
-            <div className="space-y-2">
-              <Label htmlFor="metodoPagamento">Método de Pagamento *</Label>
+            <div className="space-y-3">
+              <Label htmlFor="metodoPagamento" className="text-sm font-semibold">💳 Método de Pagamento *</Label>
               <Select
                 value={editedPagamento.metodoPagamento || "pix"}
                 onValueChange={(value: "pix" | "transferencia_bancaria") =>
