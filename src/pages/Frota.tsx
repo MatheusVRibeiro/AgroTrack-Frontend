@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -145,7 +146,7 @@ export default function Frota() {
       proprietario_tipo: caminhao.proprietario_tipo,
     });
     setIsEditing(true);
-    setSelectedCaminhao(caminhao);
+    setSelectedCaminhao(null); // Limpa o modal de detalhes
     setIsModalOpen(true);
   };
 
@@ -439,6 +440,7 @@ export default function Frota() {
             variant="outline"
             size="sm"
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               setSelectedCaminhao(item);
             }}
@@ -451,6 +453,7 @@ export default function Frota() {
             variant="outline"
             size="sm"
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               handleOpenEditModal(item);
             }}
@@ -570,15 +573,19 @@ export default function Frota() {
           columns={columns}
           data={filteredData}
           emptyMessage="Nenhum caminhão encontrado"
+          onRowClick={(caminhao) => setSelectedCaminhao(caminhao)}
         />
       )}
 
       {/* Details Modal */}
-      <Dialog open={!!selectedCaminhao} onOpenChange={() => setSelectedCaminhao(null)}>
+      <Dialog open={!!selectedCaminhao && !isEditing} onOpenChange={() => setSelectedCaminhao(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <div className="flex items-center justify-between">
-              <DialogTitle>Detalhes do Caminhão</DialogTitle>
+              <div>
+                <DialogTitle>Detalhes do Caminhão</DialogTitle>
+                <DialogDescription>Informações completas sobre o veículo</DialogDescription>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -832,6 +839,9 @@ export default function Frota() {
               </div>
               {isEditing ? "Editar Caminhão" : "Cadastrar Novo Caminhão"}
             </DialogTitle>
+            <DialogDescription>
+              {isEditing ? "Atualize as informações do veículo" : "Preencha os dados do novo veículo"}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 max-h-[calc(90vh-200px)] overflow-y-auto px-1">
