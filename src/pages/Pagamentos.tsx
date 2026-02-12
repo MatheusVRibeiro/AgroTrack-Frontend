@@ -61,6 +61,7 @@ import { cn } from "@/lib/utils";
 import pagamentosService from "@/services/pagamentos";
 import * as motoristasService from "@/services/motoristas";
 import * as fretesService from "@/services/fretes";
+import custosService from "@/services/custos";
 import { usePeriodoFilter } from "@/hooks/usePeriodoFilter";
 import type { Pagamento, CriarPagamentoPayload, AtualizarPagamentoPayload, Motorista, Frete } from "@/types";
 
@@ -175,17 +176,6 @@ interface CustoAdicional {
   valor: number;
   descricao: string;
 }
-
-const custosAdicionaisData: CustoAdicional[] = [
-  { freteId: "F001", valor: 1200, descricao: "Combustível" },
-  { freteId: "F001", valor: 400, descricao: "Pedágio" },
-  { freteId: "F002", valor: 1500, descricao: "Combustível" },
-  { freteId: "F002", valor: 850, descricao: "Pedágio" },
-  { freteId: "F003", valor: 1100, descricao: "Combustível" },
-  { freteId: "F003", valor: 590, descricao: "Pedágio" },
-  { freteId: "F004", valor: 950, descricao: "Combustível" },
-  { freteId: "F004", valor: 770, descricao: "Pedágio" },
-];
 
 const pagamentosData: PagamentoMotorista[] = [
   {
@@ -355,9 +345,24 @@ export default function Pagamentos() {
     queryFn: fretesService.listarFretes,
   });
 
+  const { data: custosResponse } = useQuery({
+    queryKey: ["custos"],
+    queryFn: custosService.listarCustos,
+  });
+
   const pagamentosApi: Pagamento[] = pagamentosResponse?.data || [];
   const motoristasApi: Motorista[] = motoristasResponse?.data || [];
   const fretesApi: Frete[] = fretesResponse?.data || [];
+  const custosApi: any[] = custosResponse?.data || [];
+
+  // Mapear custos da API para o formato usado no componente
+  const custosAdicionaisData: CustoAdicional[] = useMemo(() => {
+    return custosApi.map((custo) => ({
+      freteId: String(custo.frete_id),
+      valor: Number(custo.valor) || 0,
+      descricao: custo.descricao || custo.tipo || "Custo adicional",
+    }));
+  }, [custosApi]);
 
   // Funções de formatação
   const formatDateBR = (value: string) => {
@@ -1446,9 +1451,9 @@ export default function Pagamentos() {
                       {selectedPagamento.toneladas}t
                     </p>
                   </Card>
-                  <Card className="p-4 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-900">
+                  <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900">
                     <p className="text-sm text-muted-foreground mb-1">Fretes</p>
-                    <p className="text-3xl font-bold text-purple-600">
+                    <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">
                       {selectedPagamento.fretes}
                     </p>
                   </Card>
@@ -1712,14 +1717,14 @@ export default function Pagamentos() {
                 <div className="flex items-center justify-between">
                   <Label>Selecione os fretes para pagamento *</Label>
                   {fretesNaoPagos.length > 0 && (
-                    <Badge className="bg-gradient-to-r from-blue-300 to-blue-400 text-slate-900 border-0">
+                    <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
                       {fretesNaoPagos.length} frete{fretesNaoPagos.length > 1 ? 's' : ''} aguardando
                     </Badge>
                   )}
                 </div>
                 {fretesNaoPagos.length === 0 ? (
-                  <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-900 flex items-center gap-3">
-                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                  <Card className="p-4 bg-amber-50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900 flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0" />
                     <p className="text-sm text-amber-700 dark:text-amber-300">
                       Este motorista não possui fretes pendentes de pagamento
                     </p>
@@ -1730,10 +1735,10 @@ export default function Pagamentos() {
                       <Card 
                         key={frete.id} 
                         className={cn(
-                          "p-4 cursor-pointer transition-all border-2 backdrop-blur-sm",
+                          "p-4 cursor-pointer transition-all border-2",
                           selectedFretes.includes(frete.id)
-                            ? "border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 shadow-md shadow-blue-200 dark:shadow-blue-900"
-                            : "border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm"
+                            ? "border-green-400 bg-green-50 dark:bg-green-950/20 shadow-sm"
+                            : "border-border hover:border-green-300 dark:hover:border-green-700 hover:shadow-sm"
                         )}
                       >
                         <div className="flex items-center justify-between gap-4">
@@ -1746,14 +1751,14 @@ export default function Pagamentos() {
                             />
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
-                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
                                   {frete.id}
                                 </p>
                                 <span className="text-slate-400 dark:text-slate-500">•</span>
                                 <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
                                   {frete.rota}
                                 </p>
-                                <Badge className="bg-gradient-to-r from-amber-300 to-orange-300 text-amber-800 text-xs border-0 ml-auto">
+                                <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs ml-auto border-blue-200 dark:border-blue-800">
                                   Aguardando
                                 </Badge>
                               </div>
@@ -1766,8 +1771,8 @@ export default function Pagamentos() {
                             <div className={cn(
                               "text-base font-bold px-3 py-1 rounded-lg",
                               selectedFretes.includes(frete.id)
-                                ? "bg-gradient-to-r from-emerald-400 to-green-400 text-white"
-                                : "text-emerald-600"
+                                ? "bg-green-500 text-white dark:bg-green-600"
+                                : "text-green-600 dark:text-green-500"
                             )}>
                               R$ {frete.valorGerado.toLocaleString("pt-BR")}
                             </div>
@@ -1873,59 +1878,63 @@ export default function Pagamentos() {
                 <Separator />
 
                 {/* Resumo Final de Valores */}
-                <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/40 dark:to-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-3">Resumo Financeiro</p>
+                <div className="bg-slate-50 dark:bg-slate-900/30 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-3">Resumo Financeiro</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-2">
                       <Label className="text-xs text-slate-600 dark:text-slate-400">Valor Bruto</Label>
-                      <Card className="p-4 bg-gradient-to-br from-blue-300 to-blue-400 text-slate-900 border-0 shadow-lg">
-                        <p className="text-2xl font-bold">
+                      <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 shadow-sm">
+                        <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
                           R$ {fretesNaoPagos
                             .filter((f) => selectedFretes.includes(f.id))
                             .reduce((acc, f) => acc + f.valorGerado, 0)
                             .toLocaleString("pt-BR")}
                         </p>
-                        <p className="text-xs text-blue-100 mt-1">Receita dos fretes</p>
+                        <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">Receita dos fretes</p>
                       </Card>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs text-slate-600 dark:text-slate-400">Total de Descontos</Label>
-                      <Card className="p-4 bg-gradient-to-br from-red-300 to-red-400 text-slate-900 border-0 shadow-lg">
-                        <p className="text-2xl font-bold">
-                          -R$ {selectedFretes
-                            .reduce((acc, freteId) => {
-                              return (
-                                acc +
-                                custosAdicionaisData
-                                  .filter((c) => c.freteId === freteId)
-                                  .reduce((sum, c) => sum + c.valor, 0)
-                              );
-                            }, 0)
-                            .toLocaleString("pt-BR")}
+                      <Card className="p-4 bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900 shadow-sm">
+                        <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+                          {(() => {
+                            const totalDescontos = selectedFretes
+                              .reduce((acc, freteId) => {
+                                return (
+                                  acc +
+                                  custosAdicionaisData
+                                    .filter((c) => c.freteId === freteId)
+                                    .reduce((sum, c) => sum + c.valor, 0)
+                                );
+                              }, 0);
+                            return totalDescontos > 0 
+                              ? `-R$ ${totalDescontos.toLocaleString("pt-BR")}`
+                              : "R$ 0";
+                          })()}
                         </p>
-                        <p className="text-xs text-red-100 mt-1">Combustível, pedágio, etc</p>
+                        <p className="text-xs text-red-600 dark:text-red-500 mt-1">Combustível, pedágio, etc</p>
                       </Card>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs text-slate-600 dark:text-slate-400">Valor a Pagar</Label>
-                      <Card className="p-4 bg-gradient-to-br from-emerald-300 to-emerald-400 text-slate-900 border-0 shadow-lg">
-                        <p className="text-2xl font-bold">
+                      <Card className="p-4 bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900 shadow-sm">
+                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">
                           R$ {(editedPagamento.valorTotal || 0).toLocaleString("pt-BR")}
                         </p>
-                        <p className="text-xs text-emerald-100 mt-1">Líquido ao motorista</p>
+                        <p className="text-xs text-green-600 dark:text-green-500 mt-1">Líquido ao motorista</p>
                       </Card>
                     </div>
                   </div>
                 </div>
 
-                <Card className="p-5 bg-gradient-to-br from-purple-300 to-indigo-300 text-slate-900 border-0 shadow-lg">
+                <Card className="p-5 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-slate-700 font-semibold mb-1">Valor Unitário por Tonelada</p>
-                      <p className="text-3xl font-bold">
+                      <p className="text-sm text-emerald-700 dark:text-emerald-400 font-semibold mb-1">Valor Unitário por Tonelada</p>
+                      <p className="text-3xl font-bold text-emerald-800 dark:text-emerald-300">
                         R$ {(editedPagamento.valorUnitarioPorTonelada || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
-                      <p className="text-xs text-slate-700 mt-2">
+                      <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-2">
                         📊 {editedPagamento.toneladas.toFixed(2)}t • Já com descontos incluídos
                       </p>
                     </div>

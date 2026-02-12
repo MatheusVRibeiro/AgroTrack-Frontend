@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
@@ -151,16 +151,6 @@ export default function Dashboard() {
   const fazendas = fazendaResponse?.data || [];
   const motoristas = motoristasResponse?.data || [];
 
-  // Debug logging
-  useEffect(() => {
-    console.log("Dashboard - Fazendas recebidas:", fazendas);
-    console.log("Dashboard - Total de fazendas:", fazendas.length);
-    console.log("Dashboard - Loading fazendas?", fazendaLoading);
-    if (fazendas.length > 0) {
-      console.log("Primeira fazenda:", fazendas[0]);
-    }
-  }, [fazendas, fazendaLoading]);
-
   // Buscar estoques de fazendas
   const estoquesFazendas = useMemo(() => {
     const getEstoques = (window as any).getEstoquesFazendas;
@@ -174,23 +164,43 @@ export default function Dashboard() {
   const kpisIntegrados = useMemo(() => {
     // Usar dados reais do backend ou fallback para simulados
     const fretesParaCalcular = fretes.length > 0 ? fretes : fretesSimulados;
-    const fretesJaneiro = fretesParaCalcular.filter(f => {
-      const isFrete = (f as any).mes === "jan" && (f as any).status !== "cancelado";
-      return isFrete || !isFrete; // Se não tem mes (dados reais), trocar para fallback
+    
+    // Filtrar fretes por data (Janeiro 2025 e Dezembro 2024)
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth(); // 0-11
+    const anoAtual = hoje.getFullYear();
+    
+    const fretesJaneiro = fretesParaCalcular.filter((f: any) => {
+      if (f.mes === "jan") return f.status !== "cancelado"; // Dados simulados
+      const dataFrete = new Date(f.data_frete);
+      return dataFrete.getMonth() === 0 && dataFrete.getFullYear() === 2025; // Janeiro 2025
     });
-    const fretesDezembro = fretesParaCalcular.filter(f => (f as any).mes === "dez");
-    const fretesAtivos = fretesParaCalcular.filter(f => (f as any).status === "em_transito").length;
+    
+    const fretesDezembro = fretesParaCalcular.filter((f: any) => {
+      if (f.mes === "dez") return true; // Dados simulados
+      const dataFrete = new Date(f.data_frete);
+      return dataFrete.getMonth() === 11 && dataFrete.getFullYear() === 2024; // Dezembro 2024
+    });
+    
+    // Fretes ativos: assumir que todos são ativos se vieram do backend
+    const fretesAtivos = fretesParaCalcular.filter((f: any) => {
+      if (f.status === "em_transito") return true;
+      // Se não tem status, considerar ativos os fretes dos últimos 7 dias
+      const dataFrete = new Date(f.data_frete);
+      const diff = hoje.getTime() - dataFrete.getTime();
+      return diff < 7 * 24 * 60 * 60 * 1000;
+    }).length;
     
     // KPIs de Fretes (Janeiro / Atual)
-    const totalSacasJan = fretesJaneiro.reduce((acc: number, f: any) => acc + ((f as any).quantidadeSacas || 0), 0);
-    const totalReceitaJan = fretesJaneiro.reduce((acc: number, f: any) => acc + ((f as any).receita || 0), 0);
-    const totalCustosJan = fretesJaneiro.reduce((acc: number, f: any) => acc + ((f as any).custos || 0), 0);
+    const totalSacasJan = fretesJaneiro.reduce((acc: number, f: any) => acc + (Number(f.quantidade_sacas) || 0), 0);
+    const totalReceitaJan = fretesJaneiro.reduce((acc: number, f: any) => acc + (Number(f.receita) || 0), 0);
+    const totalCustosJan = fretesJaneiro.reduce((acc: number, f: any) => acc + (Number(f.custos) || 0), 0);
     const totalResultadoJan = totalReceitaJan - totalCustosJan;
     
     // KPIs de Fretes (Dezembro / Previous)
-    const totalSacasDez = fretesDezembro.reduce((acc: number, f: any) => acc + ((f as any).quantidadeSacas || 0), 0);
-    const totalReceitaDez = fretesDezembro.reduce((acc: number, f: any) => acc + ((f as any).receita || 0), 0);
-    const totalCustosDez = fretesDezembro.reduce((acc: number, f: any) => acc + ((f as any).custos || 0), 0);
+    const totalSacasDez = fretesDezembro.reduce((acc: number, f: any) => acc + (Number(f.quantidade_sacas) || 0), 0);
+    const totalReceitaDez = fretesDezembro.reduce((acc: number, f: any) => acc + (Number(f.receita) || 0), 0);
+    const totalCustosDez = fretesDezembro.reduce((acc: number, f: any) => acc + (Number(f.custos) || 0), 0);
     const totalResultadoDez = totalReceitaDez - totalCustosDez;
     
     // Custo médio por saca (apenas fretes concluídos com custo)
@@ -318,8 +328,9 @@ export default function Dashboard() {
     const motoristasReceitaMap: Record<string, { name: string; revenue: number; trips: number }> = {};
     
     fretes.forEach((frete: any) => {
-      const motoristaNome = frete.motorista || "Desconhecido";
-      const motoristaId = frete.motoristaId || motoristaNome;
+      // Suportar campos do backend (motorista_nome) e simulados (motorista)
+      const motoristaNome = frete.motorista_nome || frete.motorista || "Desconhecido";
+      const motoristaId = frete.motorista_id || frete.motoristaId || motoristaNome;
       const receita = Number(frete.receita || 0);
       
       if (!motoristasReceitaMap[motoristaId]) {
