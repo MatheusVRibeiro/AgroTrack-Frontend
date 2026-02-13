@@ -21,6 +21,7 @@ import {
 import { InputMascarado } from "@/components/InputMascarado";
 import { validarCPF, validarEmail, validarCNH, validarTelefone, apenasNumeros, formatarDataBrasileira, converterDataBrasileira, formatarCPF, formatarTelefone } from "@/utils/formatters";
 import * as motoristasService from "@/services/motoristas";
+import caminhoesService from "@/services/caminhoes";
 import {
   Select,
   SelectContent,
@@ -70,14 +71,7 @@ interface CriarMotoristaPayload {
   tipo_conta?: "corrente" | "poupanca";
 }
 
-// Lista de caminhões disponíveis (simulado)
-const caminhoes = [
-  { placa: "ABC-1234", modelo: "Scania R450" },
-  { placa: "XYZ-5678", modelo: "Volvo FH 460" },
-  { placa: "DEF-9012", modelo: "Mercedes-Benz Actros" },
-  { placa: "GHI-3456", modelo: "Iveco Stralis" },
-  { placa: "JKL-7890", modelo: "DAF XF" },
-];
+// Caminhões serão carregados via API
 
 const statusConfig = {
   ativo: { label: "Ativo", variant: "active" as const },
@@ -108,6 +102,27 @@ export default function Motoristas() {
   // Carregar motoristas da API
   useEffect(() => {
     carregarMotoristas();
+  }, []);
+
+  // Caminhões carregados via API (substitui dados simulados removidos)
+  const [caminhoesState, setCaminhoesState] = useState<{ placa: string; modelo?: string }[]>([]);
+
+  const carregarCaminhoes = async () => {
+    try {
+      const res = await caminhoesService.listarCaminhoes();
+      if (res.success && Array.isArray(res.data)) {
+        setCaminhoesState(res.data as any);
+      } else {
+        setCaminhoesState([]);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar caminhões:", error);
+      setCaminhoesState([]);
+    }
+  };
+
+  useEffect(() => {
+    carregarCaminhoes();
   }, []);
 
   const carregarMotoristas = async () => {
@@ -918,7 +933,7 @@ export default function Motoristas() {
                       {selectedMotorista.caminhao_atual}
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {caminhoes.find(c => c.placa === selectedMotorista.caminhao_atual)?.modelo}
+                      {caminhoesState.find(c => c.placa === selectedMotorista.caminhao_atual)?.modelo}
                     </p>
                   </Card>
                 )}
@@ -1208,7 +1223,7 @@ export default function Motoristas() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum</SelectItem>
-                    {caminhoes.map((caminhao) => (
+                    {caminhoesState.map((caminhao) => (
                       <SelectItem key={caminhao.placa} value={caminhao.placa}>
                         {caminhao.placa} - {caminhao.modelo}
                       </SelectItem>

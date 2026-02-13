@@ -527,8 +527,8 @@ export default function Dashboard() {
       {/* ===== SEÇÃO 2: KPI CARDS DE FRETES (MANTIDOS) ===== */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <KPICard
-          title="Fretes Realizados Hoje"
-          value={`${kpisIntegrados.hoje.totalFretes} ${kpisIntegrados.hoje.totalFretes === 1 ? 'frete' : 'fretes'}`}
+          title="Fretes Hoje"
+          value={`${kpisIntegrados.hoje.totalFretes} ${kpisIntegrados.hoje.totalFretes === 1 ? 'frete' : 'Fretes'}`}
           icon={Package}
           variant="primary"
           trend={{

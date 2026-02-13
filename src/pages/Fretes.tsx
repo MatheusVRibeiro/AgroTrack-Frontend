@@ -142,222 +142,7 @@ interface Custo {
   tipoCombustivel?: "gasolina" | "diesel" | "etanol" | "gnv";
 }
 
-const fretesData: Frete[] = [
-  {
-    id: "FRETE-2026-001",
-    origem: "Fazenda Santa Rita",
-    destino: "Secador Central - Filial 1",
-    motorista: "Carlos Silva",
-    motoristaId: "1",
-    caminhao: "ABC-1234",
-    caminhaoId: "1",
-    mercadoria: "Amendoim em Casca",
-    mercadoriaId: "1",
-    fazendaNome: "Fazenda Santa Rita",
-    dataFrete: "20/01/2026",
-    quantidadeSacas: 450,
-    toneladas: 11.25,
-    valorPorTonelada: 600,
-    receita: 6750, // 11.25t × R$ 600/t
-    custos: 1720,
-    resultado: 5030,
-  },
-  {
-    id: "FRETE-2026-002",
-    origem: "Fazenda Boa Esperança",
-    destino: "Secador Central - Filial 2",
-    motorista: "João Oliveira",
-    motoristaId: "2",
-    caminhao: "DEF-5678",
-    caminhaoId: "2",
-    mercadoria: "Amendoim Descascado",
-    mercadoriaId: "2",
-    fazendaNome: "Fazenda Boa Esperança",
-    dataFrete: "18/01/2026",
-    quantidadeSacas: 380,
-    toneladas: 9.5,
-    valorPorTonelada: 800,
-    receita: 7600, // 9.5t × R$ 800/t
-    custos: 1690,
-    resultado: 5910,
-  },
-  {
-    id: "FRETE-2026-003",
-    origem: "Fazenda Vale Verde",
-    destino: "Secador Central - Filial 1",
-    motorista: "Pedro Santos",
-    motoristaId: "3",
-    caminhao: "GHI-9012",
-    caminhaoId: "3",
-    mercadoria: "Amendoim em Casca",
-    mercadoriaId: "1",
-    fazendaNome: "Fazenda Vale Verde",
-    dataFrete: "15/01/2026",
-    quantidadeSacas: 500,
-    toneladas: 12.5,
-    valorPorTonelada: 600,
-    receita: 7500, // 12.5t × R$ 600/t
-    custos: 0,
-    resultado: 7500,
-  },
-  {
-    id: "FRETE-2026-004",
-    origem: "Fazenda São João",
-    destino: "Secador Central - Filial 3",
-    motorista: "André Costa",
-    motoristaId: "4",
-    caminhao: "JKL-3456",
-    caminhaoId: "4",
-    mercadoria: "Amendoim Premium",
-    mercadoriaId: "3",
-    fazendaNome: "Fazenda São João",
-    dataFrete: "12/01/2026",
-    quantidadeSacas: 300,
-    toneladas: 7.5,
-    valorPorTonelada: 1000,
-    receita: 7500, // 7.5t × R$ 1000/t
-    custos: 1720,
-    resultado: 5780,
-  },
-  {
-    id: "FRETE-2026-005",
-    origem: "Fazenda Recanto",
-    destino: "Secador Central - Filial 2",
-    motorista: "Lucas Ferreira",
-    motoristaId: "5",
-    caminhao: "MNO-7890",
-    caminhaoId: "5",
-    mercadoria: "Amendoim em Casca",
-    mercadoriaId: "1",
-    fazendaNome: "Fazenda Recanto",
-    dataFrete: "10/01/2026",
-    quantidadeSacas: 0,
-    toneladas: 0,
-    valorPorTonelada: 0,
-    receita: 0,
-    custos: 0,
-    resultado: 0,
-  },
-];
-
-// Data demo de motoristas
-const motoristasData: Motorista[] = [
-  { id: "1", nome: "Carlos Silva" },
-  { id: "2", nome: "João Oliveira" },
-  { id: "3", nome: "Pedro Santos" },
-  { id: "4", nome: "André Costa" },
-  { id: "5", nome: "Lucas Ferreira" },
-];
-
-// Data demo de caminhões
-const caminhoesData: Caminhao[] = [
-  { id: "1", placa: "ABC-1234" },
-  { id: "2", placa: "DEF-5678" },
-  { id: "3", placa: "GHI-9012" },
-  { id: "4", placa: "JKL-3456" },
-  { id: "5", placa: "MNO-7890" },
-];
-
-const locaisEntregaFixos = [
-  "Fazenda - Sta Rosa",
-  "Filial 01 - Secagem e Armazenamento",
-];
-
-// Data demo de mercadorias com tarifas
-const mercadoriasData: Mercadoria[] = [
-  { id: "1", nome: "Amendoim em Casca", tarifaPorSaca: 15, pesoMedioSaca: 25 },
-  { id: "2", nome: "Amendoim Descascado", tarifaPorSaca: 20, pesoMedioSaca: 25 },
-  { id: "3", nome: "Amendoim Premium", tarifaPorSaca: 25, pesoMedioSaca: 25 },
-  { id: "4", nome: "Amendoim Tipo 1", tarifaPorSaca: 18, pesoMedioSaca: 25 },
-  { id: "5", nome: "Amendoim Tipo 2", tarifaPorSaca: 16, pesoMedioSaca: 25 },
-];
-
-// Custos de abastecimento por caminhão (litro)
-const custosAbastecimentoPorCaminhao: CustoAbastecimento[] = [
-  { id: "1", custoLitro: 5.50 }, // ABC-1234
-  { id: "2", custoLitro: 5.30 }, // DEF-5678
-  { id: "3", custoLitro: 5.80 }, // GHI-9012
-  { id: "4", custoLitro: 5.40 }, // JKL-3456
-  { id: "5", custoLitro: 5.60 }, // MNO-7890
-];
-
-// Custos de motorista (diária + adicional pernoite)
-const custosPorMotorista: CustoMotorista[] = [
-  { motoristaId: "1", diaria: 150, adicionalPernoite: 80 }, // Carlos Silva
-  { motoristaId: "2", diaria: 140, adicionalPernoite: 75 }, // João Oliveira
-  { motoristaId: "3", diaria: 160, adicionalPernoite: 85 }, // Pedro Santos
-  { motoristaId: "4", diaria: 145, adicionalPernoite: 78 }, // André Costa
-  { motoristaId: "5", diaria: 155, adicionalPernoite: 82 }, // Lucas Ferreira
-];
-
-// Dados demo de estoques de fazendas
-const estoquesFazendasData: EstoqueFazenda[] = [
-  {
-    id: "FAZ-001",
-    fazenda: "Fazenda Santa Clara",
-    localizacao: "Tupã - SP",
-    mercadoria: "Amendoim em Casca",
-    variedade: "Runner IAC 886",
-    quantidadeSacas: 15000,
-    quantidadeInicial: 20000,
-    precoPorTonelada: 3800,
-    pesoMedioSaca: 25,
-    safra: "2025/2026",
-    colheitaFinalizada: false,
-  },
-  {
-    id: "FAZ-002",
-    fazenda: "Fazenda Boa Vista",
-    localizacao: "Marília - SP",
-    mercadoria: "Amendoim Tipo 1",
-    variedade: "IAC OL3",
-    quantidadeSacas: 8500,
-    quantidadeInicial: 12000,
-    precoPorTonelada: 4000,
-    pesoMedioSaca: 25,
-    safra: "2025/2026",
-    colheitaFinalizada: false,
-  },
-  {
-    id: "FAZ-003",
-    fazenda: "Fazenda São José",
-    localizacao: "Osvaldo Cruz - SP",
-    mercadoria: "Amendoim Premium",
-    variedade: "IAC 503",
-    quantidadeSacas: 6200,
-    quantidadeInicial: 8000,
-    precoPorTonelada: 4500,
-    pesoMedioSaca: 25,
-    safra: "2025/2026",
-    colheitaFinalizada: false,
-  },
-  {
-    id: "FAZ-004",
-    fazenda: "Fazenda Nova Esperança",
-    localizacao: "Adamantina - SP",
-    mercadoria: "Amendoim Descascado",
-    variedade: "Runner IAC 886",
-    quantidadeSacas: 4800,
-    quantidadeInicial: 6000,
-    precoPorTonelada: 4200,
-    pesoMedioSaca: 25,
-    safra: "2025/2026",
-    colheitaFinalizada: false,
-  },
-  {
-    id: "FAZ-005",
-    fazenda: "Fazenda Primavera",
-    localizacao: "Dracena - SP",
-    mercadoria: "Amendoim Tipo 2",
-    variedade: "IAC OL4",
-    quantidadeSacas: 10500,
-    quantidadeInicial: 15000,
-    precoPorTonelada: 3600,
-    pesoMedioSaca: 25,
-    safra: "2025/2026",
-    colheitaFinalizada: false,
-  },
-];
+// Dados agora carregados via API (motoristas, caminhões, mercadorias, estoques, etc.)
 
 // Dados de custos adicionais
 const custosData: Custo[] = [
@@ -491,6 +276,9 @@ export default function Fretes() {
     totalCustos: 8900,
     totalFretes: 12,
   };
+
+  // Locais de entrega (vazio por padrão — dados reais vêm da API)
+  const locaisEntregaFixos: string[] = [];
 
   // ========== QUERIES ==========
   // Carregar Motoristas
@@ -692,8 +480,8 @@ export default function Fretes() {
     // Buscar dados selecionados
     const motorista = motoristasState.find(m => m.id === newFrete.motoristaId);
     const caminhao = caminhoesState.find(c => c.id === newFrete.caminhaoId);
-    const custoAbastecimento = custosAbastecimentoPorCaminhao.find(c => c.id === newFrete.caminhaoId);
-    const custoMotorista = custosPorMotorista.find(m => m.motoristaId === newFrete.motoristaId);
+    const custoAbastecimento = undefined;
+    const custoMotorista = undefined;
 
     if (!motorista || !caminhao) {
       toast.error("❌ Dados incompletos", {
