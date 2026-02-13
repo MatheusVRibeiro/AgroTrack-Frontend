@@ -370,16 +370,27 @@ export default function Motoristas() {
         toast.success("Motorista cadastrado com sucesso!");
         // Recarregar lista local
         await carregarMotoristas();
-        // Garantir que outras telas (ex: Frota) atualizem o cache do react-query
+        // Invalidar cache para outras telas (ex: Frota)
         queryClient.invalidateQueries({ queryKey: ["motoristas"] });
-        // Certificar que o motorista novo não fique vinculado a um caminhão automaticamente
-        if (res.data?.id) {
-          // Remove qualquer vínculo de caminhão (API aceita null para desvincular)
-          motoristasService.atualizarMotorista(res.data.id, { caminhao_atual: null }).then(() => {
-            queryClient.invalidateQueries({ queryKey: ["motoristas"] });
-            carregarMotoristas();
-          }).catch(() => {});
+
+        // Garantir que o motorista recém-criado não esteja vinculado a um caminhão.
+        // Alguns backends podem retornar o recurso criado de forma diferente, então
+        // buscamos a lista atualizada e localizamos pelo CPF limpado.
+        try {
+          const latest = await motoristasService.listarMotoristas();
+          if (latest.success && Array.isArray(latest.data)) {
+            const cpfCriado = apenasNumeros(payload.cpf as string);
+            const encontrado = latest.data.find((m) => apenasNumeros(m.cpf) === cpfCriado);
+            if (encontrado && encontrado.caminhao_atual) {
+              await motoristasService.atualizarMotorista(encontrado.id, { caminhao_atual: null });
+              await carregarMotoristas();
+              queryClient.invalidateQueries({ queryKey: ["motoristas"] });
+            }
+          }
+        } catch (e) {
+          // não bloquear o fluxo se a limpeza falhar
         }
+
         setIsModalOpen(false);
         setErrosCampos({});
       } else {
