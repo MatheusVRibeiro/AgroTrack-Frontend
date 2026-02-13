@@ -70,6 +70,7 @@ export interface Motorista {
   data_desligamento?: string | null;
   caminhao_atual?: string;
   endereco?: string;
+  placa_temporaria?: string; // placa pendente vinculada ao motorista (pré-cadastro)
   // Dados Bancários
   tipo_pagamento?: "pix" | "transferencia_bancaria";
   chave_pix_tipo?: "cpf" | "email" | "telefone" | "aleatoria";

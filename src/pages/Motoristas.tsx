@@ -59,6 +59,7 @@ interface CriarMotoristaPayload {
   cnh_validade: string;
   cnh_categoria: "A" | "B" | "C" | "D" | "E";
   tipo: "proprio" | "terceirizado";
+  placa_temporaria?: string | null;
   data_admissao: string;
   endereco?: string;
   status?: "ativo" | "inativo" | "ferias";
@@ -156,6 +157,7 @@ export default function Motoristas() {
       cnh_categoria: "D",
       status: "ativo",
       tipo: "proprio",
+      placa_temporaria: "",
       caminhao_atual: "",
       endereco: "",
       data_admissao: new Date().toISOString().split('T')[0], // formato YYYY-MM-DD
@@ -181,6 +183,7 @@ export default function Motoristas() {
     
     setEditedMotorista({
       ...motorista,
+      placa_temporaria: motorista.placa_temporaria,
       data_admissao: dataNormalizada,
       cnh_validade: motorista.cnh_validade?.length > 10 
         ? motorista.cnh_validade.split('T')[0]
@@ -333,6 +336,9 @@ export default function Motoristas() {
 
     // Criar payload para API com dados limpos de formatação
     // IMPORTANTE: A API espera dados sem máscara/formatação
+    // Regra: se for 'proprio', não enviar placa_temporaria (define como null)
+    const placaParaEnviar = editedMotorista.tipo === 'proprio' ? null : (editedMotorista.placa_temporaria || null);
+
     const payload: CriarMotoristaPayload = {
       nome: editedMotorista.nome,
       cpf: apenasNumeros(editedMotorista.cpf), // Remove formatação (000.000.000-00 -> 00000000000)
@@ -342,6 +348,7 @@ export default function Motoristas() {
       cnh_validade: editedMotorista.cnh_validade, // Mantém formato de data: YYYY-MM-DD
       cnh_categoria: editedMotorista.cnh_categoria!,
       tipo: editedMotorista.tipo!,
+      placa_temporaria: placaParaEnviar,
       data_admissao: editedMotorista.data_admissao, // Formato YYYY-MM-DD (normalizador no handleOpenEditModal)
       endereco: editedMotorista.endereco,
       status: editedMotorista.status || "ativo",
@@ -1269,6 +1276,28 @@ export default function Motoristas() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Placa temporária: aparece apenas para terceirizados */}
+            {editedMotorista.tipo === 'terceirizado' && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                <Label htmlFor="placa_temporaria">Placa do Caminhão (Opcional)</Label>
+                <Input
+                  id="placa_temporaria"
+                  placeholder="Ex: ABC-1234"
+                  maxLength={8}
+                  value={editedMotorista.placa_temporaria || ""}
+                  onChange={(e) => {
+                    setEditedMotorista({ 
+                      ...editedMotorista, 
+                      placa_temporaria: e.target.value.toUpperCase() 
+                    });
+                  }}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Essa placa ficará salva para facilitar o cadastro rápido do caminhão depois.
+                </p>
+              </div>
+            )}
 
             {/* Data de Admissão */}
             <div className="space-y-2">

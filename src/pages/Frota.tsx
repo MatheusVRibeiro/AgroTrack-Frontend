@@ -79,6 +79,23 @@ export default function Frota() {
     onSuccess: (response) => {
       if (response.success) {
         toast.success("Caminhão cadastrado com sucesso!");
+        // Caso a placa cadastrada corresponda a uma `placa_temporaria` de algum motorista,
+        // limpamos esse campo no motorista para indicar que a placa foi associada.
+        const createdPlaca = response.data?.placa;
+        if (createdPlaca) {
+          const motorista = motoristasDisponiveis.find(m => m.placa_temporaria === createdPlaca);
+          if (motorista) {
+            motoristasService.atualizarMotorista(motorista.id, { placa_temporaria: null })
+              .then((res) => {
+                if (res.success) {
+                  queryClient.invalidateQueries({ queryKey: ["motoristas"] });
+                }
+              })
+              .catch(() => {
+                // não bloquear o fluxo principal se a limpeza falhar
+              });
+          }
+        }
         queryClient.invalidateQueries({ queryKey: ["caminhoes"] });
         setIsModalOpen(false);
       } else {
@@ -951,6 +968,52 @@ export default function Frota() {
               
               {/* Placas e Modelo */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Sugestões de Placas Pendentes (pré-cadastro) */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Info className="h-4 w-4 text-primary" />
+                    Placas Pendentes
+                  </Label>
+                  <Select
+                    value={editedCaminhao.placa || "___none___"}
+                    onValueChange={(value) => {
+                      if (value === "___none___") {
+                        // não alterar
+                        setEditedCaminhao({ ...editedCaminhao });
+                        return;
+                      }
+                      // encontrar motorista que possui essa placa temporária
+                      const motorista = motoristasDisponiveis.find(m => m.placa_temporaria === value);
+                      setEditedCaminhao({
+                        ...editedCaminhao,
+                        placa: value,
+                        motorista_fixo_id: motorista ? motorista.id : editedCaminhao.motorista_fixo_id,
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sugerir placa pendente (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="___none___">Nenhuma sugestão</SelectItem>
+                      {motoristasDisponiveis
+                        .filter(m => m.placa_temporaria && m.placa_temporaria.trim() !== "")
+                        .map((m) => (
+                          <SelectItem key={m.id} value={m.placa_temporaria!}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold">{m.placa_temporaria}</span>
+                              <div className="flex flex-col text-sm text-muted-foreground">
+                                <span className="font-semibold">{m.nome}</span>
+                                <span className="text-xs">{m.telefone}</span>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Selecione para preencher automaticamente a placa e vincular o motorista sugerido.</p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="placa" className="flex items-center gap-2">
                     <Info className="h-4 w-4 text-primary" />
