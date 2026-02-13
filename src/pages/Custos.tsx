@@ -42,6 +42,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Plus, Upload, Fuel, Wrench, FileText, DollarSign, Truck, User, MapPin, Calendar as CalendarIcon, FileCheck, Eye, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -159,6 +166,7 @@ export default function Custos() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Estados do formulário
   const [formData, setFormData] = useState<Partial<CriarCustoPayload>>({
@@ -451,7 +459,7 @@ export default function Custos() {
         title="Custos"
         description="Controle de custos por frete e tipo"
         actions={
-          <div className="flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             <PeriodoFilter
               tipoVisualizacao={tipoVisualizacao}
               selectedPeriodo={selectedPeriodo}
@@ -469,35 +477,146 @@ export default function Custos() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard
           label="Total de Custos"
           value={`R$ ${totalCustos.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           variant="loss"
-          icon={<DollarSign className="h-5 w-5 text-loss" />}
+          icon={<DollarSign className="h-4 w-4 md:h-5 md:w-5 text-loss" />}
         />
         <StatCard
           label="Combustível"
           value={`R$ ${totalCombustivel.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           variant="warning"
-          icon={<Fuel className="h-5 w-5 text-warning" />}
+          icon={<Fuel className="h-4 w-4 md:h-5 md:w-5 text-warning" />}
         />
         <StatCard
           label="Manutenção"
           value={`R$ ${totalManutencao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           variant="loss"
-          icon={<Wrench className="h-5 w-5 text-loss" />}
+          icon={<Wrench className="h-4 w-4 md:h-5 md:w-5 text-loss" />}
         />
         <StatCard
           label="Pedágios"
           value={`R$ ${totalPedagio.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           variant="primary"
-          icon={<Truck className="h-5 w-5 text-primary" />}
+          icon={<Truck className="h-4 w-4 md:h-5 md:w-5 text-primary" />}
         />
       </div>
 
+      {/* Mobile Filters */}
+      <div className="lg:hidden mb-4">
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full gap-2">
+              <Filter className="h-4 w-4" />
+              Filtros
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[85vh]">
+            <SheetHeader>
+              <SheetTitle>Filtros e Período</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Período</Label>
+                <PeriodoFilter
+                  tipoVisualizacao={tipoVisualizacao}
+                  selectedPeriodo={selectedPeriodo}
+                  periodosDisponiveis={periodosDisponiveis}
+                  formatPeriodoLabel={formatPeriodoLabel}
+                  onTipoChange={setTipoVisualizacao}
+                  onPeriodoChange={setSelectedPeriodo}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Buscar</Label>
+                <Input
+                  placeholder="Frete, descrição ou motorista..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Tipo</Label>
+                <Select value={tipoFilter} onValueChange={setTipoFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os tipos</SelectItem>
+                    <SelectItem value="combustivel">🛢️ Combustível</SelectItem>
+                    <SelectItem value="manutencao">🔧 Manutenção</SelectItem>
+                    <SelectItem value="pedagio">🛣️ Pedágio</SelectItem>
+                    <SelectItem value="outros">📄 Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Motorista</Label>
+                <Select value={motoristaFilter} onValueChange={setMotoristaFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos motoristas</SelectItem>
+                    {motoristas.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Comprovante</Label>
+                <Select value={comprovanteFilter} onValueChange={setComprovanteFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="com">✓ Com comprovante</SelectItem>
+                    <SelectItem value="sem">✗ Sem comprovante</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Período (datas)</Label>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs mb-1 block">De</Label>
+                    <Calendar
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={setDateFrom}
+                      className="pointer-events-auto"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">Até</Label>
+                    <Calendar
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={setDateTo}
+                      className="pointer-events-auto"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="pt-2 flex gap-2">
+                <Button variant="outline" onClick={clearFilters} className="flex-1">
+                  Limpar
+                </Button>
+                <Button onClick={() => setFiltersOpen(false)} className="flex-1">
+                  Aplicar
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
       {/* Filters Section */}
-      <Card className="p-6 mb-6">
+      <Card className="p-6 mb-6 hidden lg:block">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Filter className="h-5 w-5 text-muted-foreground" />
@@ -626,6 +745,16 @@ export default function Custos() {
         </div>
       </Card>
 
+      {/* FAB: Novo Custo (Mobile) */}
+      <Button
+        onClick={handleOpenNewModal}
+        className="lg:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
+        size="icon"
+        aria-label="Novo Custo"
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
+
       {/* Separação por Categoria */}
       <div className="space-y-6">
         {/* Combustível */}
@@ -658,76 +787,107 @@ export default function Custos() {
             <DataTable<Custo>
               columns={columns}
               data={paginatedData.filter(c => c.tipo === "combustivel")}
-              onRowClick={handleRowClick}
-              emptyMessage="Nenhum custo de combustível"
-            />
-          </Card>
-        )}
-
-        {/* Pedágios */}
-        {filteredData.filter(c => c.tipo === "pedagio").length > 0 && (
-          <Card className="overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/10 border-b border-blue-300 dark:border-blue-800 px-3 py-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-950">
-                    <Truck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-base">Pedágios</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {filteredData.filter(c => c.tipo === "pedagio").length} lançamento{filteredData.filter(c => c.tipo === "pedagio").length > 1 ? 's' : ''}
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <>
+                  {/* Mobile Pagination */}
+                  <div className="mt-6 md:hidden">
+                    <div className="flex items-center justify-between mb-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <span className="text-sm text-muted-foreground font-medium">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Próxima
+                      </Button>
+                    </div>
+                    <p className="text-xs text-center text-muted-foreground">
+                      {filteredData.length} registros
                     </p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                    R$ {filteredData
-                      .filter(c => c.tipo === "pedagio")
-                      .reduce((acc, c) => acc + toNumber(c.valor), 0)
-                      .toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <DataTable<Custo>
-              columns={columns}
-              data={paginatedData.filter(c => c.tipo === "pedagio")}
-              onRowClick={handleRowClick}
-              emptyMessage="Nenhum custo de pedágio"
-            />
-          </Card>
-        )}
 
-        {/* Manutenção */}
-        {filteredData.filter(c => c.tipo === "manutencao").length > 0 && (
-          <Card className="overflow-hidden">
-            <div className="bg-gradient-to-r from-red-500/20 to-rose-500/10 border-b border-red-300 dark:border-red-800 px-3 py-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-950">
-                    <Wrench className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  {/* Desktop Pagination */}
+                  <div className="mt-6 hidden md:flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(Math.max(1, currentPage - 1));
+                            }}
+                            className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                          const isCurrentPage = page === currentPage;
+                          const isVisible = Math.abs(page - currentPage) <= 1 || page === 1 || page === totalPages;
+
+                          if (!isVisible) {
+                            return null;
+                          }
+
+                          if (page === 2 && currentPage > 3) {
+                            return (
+                              <PaginationItem key="ellipsis-start">
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            );
+                          }
+
+                          if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                            return (
+                              <PaginationItem key="ellipsis-end">
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            );
+                          }
+
+                          return (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setCurrentPage(page);
+                                }}
+                                isActive={isCurrentPage}
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(Math.min(totalPages, currentPage + 1));
+                            }}
+                            className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-base">Manutenção</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {filteredData.filter(c => c.tipo === "manutencao").length} lançamento{filteredData.filter(c => c.tipo === "manutencao").length > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                    R$ {filteredData
-                      .filter(c => c.tipo === "manutencao")
-                      .reduce((acc, c) => acc + toNumber(c.valor), 0)
-                      .toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <DataTable<Custo>
+                </>
+              )}
               columns={columns}
               data={paginatedData.filter(c => c.tipo === "manutencao")}
               onRowClick={handleRowClick}

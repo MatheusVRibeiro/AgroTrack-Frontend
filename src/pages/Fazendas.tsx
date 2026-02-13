@@ -35,7 +35,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Package, Weight, DollarSign, Edit, MapPin, Save, X, Info, TrendingUp, TrendingDown, Calendar, User, Sparkles, BarChart3, FileDown, CheckCircle2, Truck, AlertCircle } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Plus, Package, Weight, DollarSign, Edit, MapPin, Save, X, Info, TrendingUp, TrendingDown, Calendar, User, Sparkles, BarChart3, FileDown, CheckCircle2, Truck, AlertCircle, Filter } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
@@ -144,6 +151,7 @@ export default function Fazendas() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedProducao, setSelectedProducao] = useState<Fazenda | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [newProducao, setNewProducao] = useState<Partial<Fazenda>>({
     fazenda: "",
     localizacao: "",
@@ -176,6 +184,10 @@ export default function Fazendas() {
     });
     setIsEditing(false);
     setIsModalOpen(true);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
   };
 
   const handleOpenEditModal = (producao: Fazenda) => {
@@ -466,7 +478,7 @@ export default function Fazendas() {
         <PageHeader
           title="Produção de Fazendas"
           actions={
-            <div className="flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3">
               <PeriodoFilter
                 tipoVisualizacao={tipoVisualizacao}
                 selectedPeriodo={selectedPeriodo}
@@ -484,97 +496,155 @@ export default function Fazendas() {
         />
 
         {/* Cards Resumo - Melhorados */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <Card className="overflow-hidden border-l-4 border-l-green-500 hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Fazendas no período</p>
-                  <p className="text-3xl font-bold tracking-tight">{fazendasFiltradas.length}</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground">Fazendas no período</p>
+                  <p className="text-2xl md:text-3xl font-bold tracking-tight">{fazendasFiltradas.length}</p>
+                  <p className="text-[11px] md:text-xs text-green-600 flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
                     Produtoras ativas
                   </p>
                 </div>
-                <div className="h-14 w-14 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <MapPin className="h-7 w-7 text-green-600" />
+                <div className="h-10 w-10 md:h-14 md:w-14 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <MapPin className="h-5 w-5 md:h-7 md:w-7 text-green-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="overflow-hidden border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Sacas Carregadas</p>
-                  <p className="text-3xl font-bold tracking-tight">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground">Sacas Carregadas</p>
+                  <p className="text-2xl md:text-3xl font-bold tracking-tight">
                     {fazendas
                       .reduce((acc, p) => acc + toNumber(p.total_sacas_carregadas), 0)
                       .toLocaleString("pt-BR")}
                   </p>
-                  <p className="text-xs text-blue-600 flex items-center gap-1">
+                  <p className="text-[11px] md:text-xs text-blue-600 flex items-center gap-1">
                     <TrendingUp className="h-3 w-3" />
                     Produção acumulada
                   </p>
                 </div>
-                <div className="h-14 w-14 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <Package className="h-7 w-7 text-blue-600" />
+                <div className="h-10 w-10 md:h-14 md:w-14 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <Package className="h-5 w-5 md:h-7 md:w-7 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="overflow-hidden border-l-4 border-l-purple-500 hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Toneladas</p>
-                  <p className="text-3xl font-bold tracking-tight">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground">Toneladas</p>
+                  <p className="text-2xl md:text-3xl font-bold tracking-tight">
                     {fazendas
                       .reduce((acc, p) => acc + toNumber(p.total_toneladas), 0)
                       .toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
                   </p>
-                  <p className="text-xs text-purple-600 flex items-center gap-1">
+                  <p className="text-[11px] md:text-xs text-purple-600 flex items-center gap-1">
                     <Weight className="h-3 w-3" />
                     Peso total carregado
                   </p>
                 </div>
-                <div className="h-14 w-14 rounded-full bg-purple-500/10 flex items-center justify-center">
-                  <Weight className="h-7 w-7 text-purple-600" />
+                <div className="h-10 w-10 md:h-14 md:w-14 rounded-full bg-purple-500/10 flex items-center justify-center">
+                  <Weight className="h-5 w-5 md:h-7 md:w-7 text-purple-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="overflow-hidden border-l-4 border-l-green-500 hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Faturamento Total</p>
-                  <p className="text-3xl font-bold tracking-tight text-green-600 dark:text-green-500">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground">Faturamento Total</p>
+                  <p className="text-2xl md:text-3xl font-bold tracking-tight text-green-600 dark:text-green-500">
                     R$ {fazendasFiltradas
                       .reduce((acc, p) => acc + toNumber(p.faturamento_total), 0)
                       .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
-                  <p className="text-xs text-green-600 dark:text-green-500 flex items-center gap-1">
+                  <p className="text-[11px] md:text-xs text-green-600 dark:text-green-500 flex items-center gap-1">
                     <DollarSign className="h-3 w-3" />
                     Receita acumulada
                   </p>
                 </div>
-                <div className="h-14 w-14 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <DollarSign className="h-7 w-7 text-green-600 dark:text-green-500" />
+                <div className="h-10 w-10 md:h-14 md:w-14 rounded-full bg-green-500/10 flex items-center justify-center">
+                  <DollarSign className="h-5 w-5 md:h-7 md:w-7 text-green-600 dark:text-green-500" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Mobile Filters */}
+        <div className="lg:hidden">
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="w-full gap-2">
+                <Filter className="h-4 w-4" />
+                Filtros
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[80vh]">
+              <SheetHeader>
+                <SheetTitle>Filtros e Período</SheetTitle>
+              </SheetHeader>
+              <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Período</Label>
+                  <PeriodoFilter
+                    tipoVisualizacao={tipoVisualizacao}
+                    selectedPeriodo={selectedPeriodo}
+                    periodosDisponiveis={periodosDisponiveis}
+                    formatPeriodoLabel={formatPeriodoLabel}
+                    onTipoChange={setTipoVisualizacao}
+                    onPeriodoChange={setSelectedPeriodo}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Buscar</Label>
+                  <Input
+                    placeholder="Buscar por fazenda, proprietário, mercadoria..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <div className="pt-2 flex gap-2">
+                  <Button variant="outline" onClick={clearFilters} className="flex-1">
+                    Limpar
+                  </Button>
+                  <Button onClick={() => setFiltersOpen(false)} className="flex-1">
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Desktop Filters */}
         <FilterBar
+          className="hidden lg:flex"
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Buscar por fazenda, proprietário, mercadoria..."
         />
+
+        {/* FAB: Nova Fazenda (Mobile) */}
+        <Button
+          onClick={handleOpenNewModal}
+          className="lg:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
+          size="icon"
+          aria-label="Nova Fazenda"
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
 
         {/* Grid de Fazendas - Cards Modernos */}
         <div className="space-y-8">
@@ -707,76 +777,107 @@ export default function Fazendas() {
                       Último frete: <span className="font-medium">
                         {fazenda.ultimo_frete_data 
                           ? format(new Date(fazenda.ultimo_frete_data), "dd/MM/yyyy", { locale: ptBR })
-                          : fazenda.ultimo_frete || "-"
-                        }
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-              })}
-            </div>
-          </div>
+                          {/* Pagination */}
+                          {totalPages > 1 && (
+                            <>
+                              {/* Mobile Pagination */}
+                              <div className="mt-6 md:hidden">
+                                <div className="flex items-center justify-between mb-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                    disabled={currentPage === 1}
+                                  >
+                                    Anterior
+                                  </Button>
+                                  <span className="text-sm text-muted-foreground font-medium">
+                                    {currentPage} / {totalPages}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                    disabled={currentPage === totalPages}
+                                  >
+                                    Próxima
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-center text-muted-foreground">
+                                  {filteredData.length} registros
+                                </p>
+                              </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-emerald-700 dark:text-emerald-400">Colheitas finalizadas</h3>
-              <Badge className="bg-emerald-600 text-white">{fazendasFinalizadas.length} fazenda(s)</Badge>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {fazendasFinalizadas.map((fazenda) => {
-                const precoPorSaca =
-                  (toNumber(fazenda.preco_por_tonelada) * toNumber(fazenda.peso_medio_saca)) / 1000;
-                const hasProducao = toNumber(fazenda.total_sacas_carregadas) > 0;
+                              {/* Desktop Pagination */}
+                              <div className="mt-6 hidden md:flex justify-center">
+                                <Pagination>
+                                  <PaginationContent>
+                                    <PaginationItem>
+                                      <PaginationPrevious
+                                        href="#"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setCurrentPage(Math.max(1, currentPage - 1));
+                                        }}
+                                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                                      />
+                                    </PaginationItem>
 
-                return (
-                  <Card
-                    key={fazenda.id}
-                    className="group hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden border-2 border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20"
-                    onClick={() => setSelectedProducao(fazenda)}
-                  >
-                    <CardHeader className="bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-transparent pb-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <Avatar className="h-12 w-12 border-2 border-background shadow-md">
-                            <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white font-bold text-lg">
-                              {fazenda.fazenda.substring(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="space-y-1">
-                            <CardTitle className="text-lg leading-tight group-hover:text-emerald-700 transition-colors">
-                              {fazenda.fazenda}
-                            </CardTitle>
-                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5" />
-                              {fazenda.localizacao}
-                            </div>
-                          </div>
-                        </div>
-                        {fazenda.colheita_finalizada ? (
-                          <Badge className="bg-emerald-600 text-white shadow-sm">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Finalizada
-                          </Badge>
-                        ) : (
-                          hasProducao && (
-                            <Badge variant="default" className="shadow-sm">
-                              <BarChart3 className="h-3 w-3 mr-1" />
-                              Ativa
-                            </Badge>
-                          )
-                        )}
-                      </div>
-                    </CardHeader>
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                                      const isCurrentPage = page === currentPage;
+                                      const isVisible = Math.abs(page - currentPage) <= 1 || page === 1 || page === totalPages;
 
-                    <CardContent className="pt-6 space-y-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">Proprietário:</span>
-                          <span className="font-medium">{fazenda.proprietario}</span>
-                        </div>
+                                      if (!isVisible) {
+                                        return null;
+                                      }
+
+                                      if (page === 2 && currentPage > 3) {
+                                        return (
+                                          <PaginationItem key="ellipsis-start">
+                                            <PaginationEllipsis />
+                                          </PaginationItem>
+                                        );
+                                      }
+
+                                      if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                                        return (
+                                          <PaginationItem key="ellipsis-end">
+                                            <PaginationEllipsis />
+                                          </PaginationItem>
+                                        );
+                                      }
+
+                                      return (
+                                        <PaginationItem key={page}>
+                                          <PaginationLink
+                                            href="#"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              setCurrentPage(page);
+                                            }}
+                                            isActive={isCurrentPage}
+                                          >
+                                            {page}
+                                          </PaginationLink>
+                                        </PaginationItem>
+                                      );
+                                    })}
+
+                                    <PaginationItem>
+                                      <PaginationNext
+                                        href="#"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setCurrentPage(Math.min(totalPages, currentPage + 1));
+                                        }}
+                                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                                      />
+                                    </PaginationItem>
+                                  </PaginationContent>
+                                </Pagination>
+                              </div>
+                            </>
+                          )}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Package className="h-4 w-4 text-blue-600" />

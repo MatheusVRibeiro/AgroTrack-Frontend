@@ -35,8 +35,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, TrendingUp, Phone, Mail, Calendar, Truck, Edit, Save, X, MapPin, Award, CreditCard, Users, UserCheck, UserX, ShieldCheck } from "lucide-react";
+import { Plus, TrendingUp, Phone, Mail, Calendar, Truck, Edit, Save, X, MapPin, Award, CreditCard, Users, UserCheck, UserX, ShieldCheck, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Motorista } from "@/types";
@@ -96,6 +103,7 @@ export default function Motoristas() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const [errosCampos, setErrosCampos] = useState<Record<string, string>>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Carregar motoristas da API
   useEffect(() => {
@@ -165,6 +173,12 @@ export default function Motoristas() {
     });
     setIsEditing(true);
     setIsModalOpen(true);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setTipoFilter("all");
   };
 
   const handleSave = async () => {
@@ -508,65 +522,131 @@ export default function Motoristas() {
         title="Motoristas"
         description="Gerencie sua equipe de motoristas"
         actions={
-          <Button onClick={handleOpenNewModal}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Motorista
-          </Button>
+          <div className="hidden lg:flex">
+            <Button onClick={handleOpenNewModal}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Motorista
+            </Button>
+          </div>
         }
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
-        <Card className="p-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
+        <Card className="p-3 md:p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total de Motoristas</p>
-              <p className="text-2xl font-bold">{totalMotoristas}</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Total de Motoristas</p>
+              <p className="text-xl md:text-2xl font-bold">{totalMotoristas}</p>
             </div>
-            <Users className="h-8 w-8 text-primary/30" />
+            <Users className="h-6 w-6 md:h-8 md:w-8 text-primary/30" />
           </div>
         </Card>
-        <Card className="p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
+        <Card className="p-3 md:p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Ativos</p>
-              <p className="text-2xl font-bold text-green-600">{totalAtivos}</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Ativos</p>
+              <p className="text-xl md:text-2xl font-bold text-green-600">{totalAtivos}</p>
             </div>
-            <UserCheck className="h-8 w-8 text-green-600/30" />
+            <UserCheck className="h-6 w-6 md:h-8 md:w-8 text-green-600/30" />
           </div>
         </Card>
-        <Card className="p-4 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900">
+        <Card className="p-3 md:p-4 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Inativos</p>
-              <p className="text-2xl font-bold text-red-600">{totalInativos}</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Inativos</p>
+              <p className="text-xl md:text-2xl font-bold text-red-600">{totalInativos}</p>
             </div>
-            <UserX className="h-8 w-8 text-red-600/30" />
+            <UserX className="h-6 w-6 md:h-8 md:w-8 text-red-600/30" />
           </div>
         </Card>
-        <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+        <Card className="p-3 md:p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Terceirizados</p>
-              <p className="text-2xl font-bold text-blue-600">{totalTerceirizados}</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Terceirizados</p>
+              <p className="text-xl md:text-2xl font-bold text-blue-600">{totalTerceirizados}</p>
             </div>
-            <ShieldCheck className="h-8 w-8 text-blue-600/30" />
+            <ShieldCheck className="h-6 w-6 md:h-8 md:w-8 text-blue-600/30" />
           </div>
         </Card>
-        <Card className="p-4 bg-profit/5 border-profit/20">
+        <Card className="p-3 md:p-4 bg-profit/5 border-profit/20 col-span-2 md:col-span-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Receita Total</p>
-              <p className="text-2xl font-bold text-profit">
+              <p className="text-xs md:text-sm text-muted-foreground">Receita Total</p>
+              <p className="text-xl md:text-2xl font-bold text-profit">
                 R$ {receitaTotal.toLocaleString("pt-BR")}
               </p>
             </div>
-            <TrendingUp className="h-8 w-8 text-profit/30" />
+            <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-profit/30" />
           </div>
         </Card>
       </div>
 
+      {/* Mobile Filters */}
+      <div className="lg:hidden mb-4">
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full gap-2">
+              <Filter className="h-4 w-4" />
+              Filtros
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[80vh]">
+            <SheetHeader>
+              <SheetTitle>Filtros de Motoristas</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Buscar</Label>
+                <Input
+                  placeholder="Buscar por nome ou CPF..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="inativo">Inativo</SelectItem>
+                    <SelectItem value="ferias">Férias</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Tipo</Label>
+                <Select value={tipoFilter} onValueChange={setTipoFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="proprio">Próprio</SelectItem>
+                    <SelectItem value="terceirizado">Terceirizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="pt-2 flex gap-2">
+                <Button variant="outline" onClick={clearFilters} className="flex-1">
+                  Limpar
+                </Button>
+                <Button onClick={() => setFiltersOpen(false)} className="flex-1">
+                  Aplicar
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Desktop Filters */}
       <FilterBar
+        className="hidden lg:flex"
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Buscar por nome ou CPF..."
@@ -600,6 +680,16 @@ export default function Motoristas() {
         </div>
       </FilterBar>
 
+      {/* FAB: Novo Motorista (Mobile) */}
+      <Button
+        onClick={handleOpenNewModal}
+        className="lg:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
+        size="icon"
+        aria-label="Novo Motorista"
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
+
       <DataTable<Motorista>
         columns={columns}
         data={paginatedData}
@@ -609,76 +699,107 @@ export default function Motoristas() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="mt-6 flex justify-center">
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setCurrentPage(Math.max(1, currentPage - 1));
-                  }}
-                  className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                />
-              </PaginationItem>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                const isCurrentPage = page === currentPage;
-                const isVisible = Math.abs(page - currentPage) <= 1 || page === 1 || page === totalPages;
-
-                if (!isVisible) {
-                  return null;
-                }
-
-                if (page === 2 && currentPage > 3) {
-                  return (
-                    <PaginationItem key="ellipsis-start">
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  );
-                }
-
-                if (page === totalPages - 1 && currentPage < totalPages - 2) {
-                  return (
-                    <PaginationItem key="ellipsis-end">
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  );
-                }
-
-                return (
-                  <PaginationItem key={page}>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setCurrentPage(page);
-                      }}
-                      isActive={isCurrentPage}
-                    >
-                      {page}
-                    </PaginationLink>
-                  </PaginationItem>
-                );
-              })}
-
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setCurrentPage(Math.min(totalPages, currentPage + 1));
-                  }}
-                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-          <div className="text-xs text-muted-foreground ml-4 flex items-center">
-            Página {currentPage} de {totalPages} • {filteredData.length} registros
+        <>
+          {/* Mobile Pagination */}
+          <div className="mt-6 md:hidden">
+            <div className="flex items-center justify-between mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground font-medium">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Próxima
+              </Button>
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              {filteredData.length} registros
+            </p>
           </div>
-        </div>
+
+          {/* Desktop Pagination */}
+          <div className="mt-6 hidden md:flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(Math.max(1, currentPage - 1));
+                    }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  const isCurrentPage = page === currentPage;
+                  const isVisible = Math.abs(page - currentPage) <= 1 || page === 1 || page === totalPages;
+
+                  if (!isVisible) {
+                    return null;
+                  }
+
+                  if (page === 2 && currentPage > 3) {
+                    return (
+                      <PaginationItem key="ellipsis-start">
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+
+                  if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                    return (
+                      <PaginationItem key="ellipsis-end">
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+
+                  return (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setCurrentPage(page);
+                        }}
+                        isActive={isCurrentPage}
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(Math.min(totalPages, currentPage + 1));
+                    }}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+            <div className="text-xs text-muted-foreground ml-4 flex items-center">
+              Página {currentPage} de {totalPages} • {filteredData.length} registros
+            </div>
+          </div>
+        </>
       )}
 
       {/* Driver Detail Modal */}

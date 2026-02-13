@@ -21,68 +21,107 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { format, parse } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import {
-  Plus,
-  FileText,
-  Edit,
-  Save,
-  X,
-  Calendar,
-  DollarSign,
-  Paperclip,
-  Download,
-  Check,
-  Clock,
-  AlertCircle,
-  Lock,
-  Unlock,
-  TrendingUp,
-  TrendingDown,
-  FileDown,
-} from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import pagamentosService from "@/services/pagamentos";
-import * as motoristasService from "@/services/motoristas";
-import * as fretesService from "@/services/fretes";
-import custosService from "@/services/custos";
-import { usePeriodoFilter } from "@/hooks/usePeriodoFilter";
-import type { Pagamento, CriarPagamentoPayload, AtualizarPagamentoPayload, Motorista, Frete } from "@/types";
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <>
+          {/* Mobile Pagination */}
+          <div className="mt-6 md:hidden">
+            <div className="flex items-center justify-between mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground font-medium">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Proxima
+              </Button>
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              {filteredData.length} registros
+            </p>
+          </div>
 
-/**
- * Página de Pagamentos - Gestão de Pagamentos Semanais aos Motoristas
- * 
- * FLUXO DE PAGAMENTO SEMANAL:
- * 1. Ao criar novo pagamento, seleciona-se o motorista
- * 2. Sistema busca automaticamente apenas fretes NÃO PAGOS daquele motorista
- *    (onde pagamentoId === null)
- * 3. Usuário seleciona quais fretes incluir no pagamento semanal
- * 4. Sistema calcula: receita bruta - custos = valor líquido a pagar
+          {/* Desktop Pagination */}
+          <div className="mt-6 hidden md:flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(Math.max(1, currentPage - 1));
+                    }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  const isCurrentPage = page === currentPage;
+                  const isVisible = Math.abs(page - currentPage) <= 1 || page === 1 || page === totalPages;
+
+                  if (!isVisible) {
+                    return null;
+                  }
+
+                  if (page === 2 && currentPage > 3) {
+                    return (
+                      <PaginationItem key="ellipsis-start">
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+
+                  if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                    return (
+                      <PaginationItem key="ellipsis-end">
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+
+                  return (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setCurrentPage(page);
+                        }}
+                        isActive={isCurrentPage}
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(Math.min(totalPages, currentPage + 1));
+                    }}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        </>
+      )}
  * 5. Ao salvar pagamento, os fretes selecionados são vinculados (recebem pagamentoId)
  * 6. Fretes pagos não aparecem mais na lista de disponíveis
  * 
@@ -444,6 +483,13 @@ export default function Pagamentos() {
   const [selectedFretes, setSelectedFretes] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const clearFilters = () => {
+    setSearch("");
+    setMotoristaFilter("all");
+    setStatusFilter("all");
+  };
 
   const motoristas = useMemo(
     () =>
@@ -1214,7 +1260,7 @@ export default function Pagamentos() {
         title="Pagamentos de Motoristas"
         description="Registre e acompanhe os pagamentos pelos fretes realizados"
         actions={
-          <div className="flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             <PeriodoFilter
               tipoVisualizacao={tipoVisualizacao}
               selectedPeriodo={selectedPeriodo}
@@ -1272,50 +1318,50 @@ export default function Pagamentos() {
       )}
 
       {/* Summary Cards com KPIs Comparativos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="p-6 bg-gradient-to-br from-primary/5 to-transparent border-l-4 border-l-primary hover:shadow-lg transition-shadow">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+        <Card className="p-4 md:p-6 bg-gradient-to-br from-primary/5 to-transparent border-l-4 border-l-primary hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total de Registros</p>
-              <p className="text-4xl font-bold mt-2 text-foreground">{pagamentosFiltradosTransformados.length}</p>
-              <p className="text-xs text-primary mt-2 flex items-center gap-1">
+              <p className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total de Registros</p>
+              <p className="text-2xl md:text-4xl font-bold mt-2 text-foreground">{pagamentosFiltradosTransformados.length}</p>
+              <p className="text-[10px] md:text-xs text-primary mt-2 flex items-center gap-1">
                 {pagamentosFiltradosTransformados.length === 0 ? "Nenhum pagamento neste período" : "Pagamentos cadastrados"}
               </p>
             </div>
-            <FileText className="h-12 w-12 text-primary/20" />
+            <FileText className="h-8 w-8 md:h-12 md:w-12 text-primary/20" />
           </div>
         </Card>
 
-        <Card className="p-6 bg-gradient-to-br from-yellow-50 to-yellow-50/30 dark:from-yellow-950/20 dark:to-yellow-950/10 border-l-4 border-l-yellow-600 hover:shadow-lg transition-shadow">
+        <Card className="p-4 md:p-6 bg-gradient-to-br from-yellow-50 to-yellow-50/30 dark:from-yellow-950/20 dark:to-yellow-950/10 border-l-4 border-l-yellow-600 hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 uppercase tracking-wide">Pendente de Pagamento</p>
-              <p className="text-4xl font-bold mt-2 text-yellow-700 dark:text-yellow-400">
+              <p className="text-[10px] md:text-xs font-semibold text-yellow-700 dark:text-yellow-300 uppercase tracking-wide">Pendente de Pagamento</p>
+              <p className="text-2xl md:text-4xl font-bold mt-2 text-yellow-700 dark:text-yellow-400">
                 R$ {pagamentosFiltradosTransformados
                   .filter((p) => p.statusPagamento === "pendente")
                   .reduce((acc, p) => acc + p.valorTotal, 0)
                   .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 flex items-center gap-1">
+              <p className="text-[10px] md:text-xs text-yellow-600 dark:text-yellow-400 mt-2 flex items-center gap-1">
                 {pagamentosFiltradosTransformados.filter(p => p.statusPagamento === "pendente").length} pagamentos
               </p>
             </div>
-            <Clock className="h-12 w-12 text-yellow-600/20" />
+            <Clock className="h-8 w-8 md:h-12 md:w-12 text-yellow-600/20" />
           </div>
         </Card>
 
-        <Card className="p-6 bg-gradient-to-br from-profit/5 to-profit/5 dark:from-profit/5 dark:to-profit/5 border-l-4 border-l-profit hover:shadow-lg transition-shadow">
+        <Card className="p-4 md:p-6 bg-gradient-to-br from-profit/5 to-profit/5 dark:from-profit/5 dark:to-profit/5 border-l-4 border-l-profit hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-profit/70 uppercase tracking-wide">Já Pago</p>
-              <p className="text-4xl font-bold mt-2 text-profit">
+              <p className="text-[10px] md:text-xs font-semibold text-profit/70 uppercase tracking-wide">Já Pago</p>
+              <p className="text-2xl md:text-4xl font-bold mt-2 text-profit">
                 R$ {pagamentosFiltradosTransformados
                   .filter((p) => p.statusPagamento === "pago")
                   .reduce((acc, p) => acc + p.valorTotal, 0)
                   .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <p className="text-xs text-profit/70 flex items-center gap-1">
+                <p className="text-[10px] md:text-xs text-profit/70 flex items-center gap-1">
                   {pagamentosFiltradosTransformados.filter(p => p.statusPagamento === "pago").length} pagamentos
                 </p>
                 {(() => {
@@ -1353,12 +1399,131 @@ export default function Pagamentos() {
                 })()}
               </div>
             </div>
-            <Check className="h-12 w-12 text-profit/20" />
+            <Check className="h-8 w-8 md:h-12 md:w-12 text-profit/20" />
           </div>
         </Card>
       </div>
 
+      {/* Mobile Filters */}
+      <div className="lg:hidden mb-4">
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full gap-2">
+              <Filter className="h-4 w-4" />
+              Filtros
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[85vh]">
+            <SheetHeader>
+              <SheetTitle>Filtros e Acoes</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Periodo</Label>
+                <PeriodoFilter
+                  tipoVisualizacao={tipoVisualizacao}
+                  selectedPeriodo={selectedPeriodo}
+                  periodosDisponiveis={periodosDisponiveis}
+                  formatPeriodoLabel={formatPeriodoLabel}
+                  onTipoChange={setTipoVisualizacao}
+                  onPeriodoChange={setSelectedPeriodo}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Buscar</Label>
+                <Input
+                  placeholder="Buscar por motorista ou ID de pagamento..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Motorista</Label>
+                <Select value={motoristaFilter} onValueChange={setMotoristaFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Motorista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {motoristas.map((motorista) => (
+                      <SelectItem key={motorista.id} value={motorista.id}>
+                        {motorista.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="processando">Processando</SelectItem>
+                    <SelectItem value="pago">Pago</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Acoes</Label>
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      handleExportarPDF();
+                      setFiltersOpen(false);
+                    }}
+                    className="w-full gap-2"
+                  >
+                    <FileDown className="h-4 w-4" />
+                    Exportar PDF
+                  </Button>
+                  <Button
+                    variant={mesesFechados.includes(selectedPeriodo) ? "outline" : "secondary"}
+                    onClick={() => {
+                      handleToggleFecharMes();
+                      setFiltersOpen(false);
+                    }}
+                    className="w-full gap-2"
+                  >
+                    {mesesFechados.includes(selectedPeriodo) ? (
+                      <>
+                        <Unlock className="h-4 w-4" />
+                        Reabrir Mes
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-4 w-4" />
+                        Fechar Mes
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <Button variant="outline" onClick={clearFilters} className="flex-1">
+                  Limpar
+                </Button>
+                <Button onClick={() => setFiltersOpen(false)} className="flex-1">
+                  Aplicar
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Desktop Filters */}
       <FilterBar
+        className="hidden lg:flex"
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Buscar por motorista ou ID de pagamento..."
@@ -1395,6 +1560,17 @@ export default function Pagamentos() {
           </Select>
         </div>
       </FilterBar>
+
+      {/* FAB: Novo Pagamento (Mobile) */}
+      <Button
+        onClick={handleOpenNewModal}
+        disabled={mesesFechados.includes(selectedPeriodo)}
+        className="lg:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
+        size="icon"
+        aria-label="Novo Pagamento"
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
 
       <DataTable<PagamentoMotorista>
         columns={columns}
