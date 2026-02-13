@@ -1130,7 +1130,7 @@ export default function Motoristas() {
                 <Select
                   value={editedMotorista.tipo || "proprio"}
                   onValueChange={(value: "proprio" | "terceirizado") =>
-                    setEditedMotorista({ ...editedMotorista, tipo: value })
+                    setEditedMotorista({ ...editedMotorista, tipo: value, placa_temporaria: value === "proprio" ? "" : editedMotorista.placa_temporaria })
                   }
                 >
                   <SelectTrigger>
@@ -1146,16 +1146,17 @@ export default function Motoristas() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="placa_temporaria">Placa temporária</Label>
-                <Input
-                  id="placa_temporaria"
-                  placeholder="ABC1D23"
-                  value={editedMotorista.placa_temporaria || ""}
-                  onChange={(e) => setEditedMotorista({ ...editedMotorista, placa_temporaria: e.target.value })}
-                  disabled={editedMotorista.tipo === "proprio"}
-                />
-              </div>
+              {editedMotorista.tipo === "terceirizado" && (
+                <div className="space-y-2">
+                  <Label htmlFor="placa_temporaria">Placa temporária</Label>
+                  <Input
+                    id="placa_temporaria"
+                    placeholder="ABC1D23"
+                    value={editedMotorista.placa_temporaria || ""}
+                    onChange={(e) => setEditedMotorista({ ...editedMotorista, placa_temporaria: e.target.value.toUpperCase() })}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Telefone e Email */}
@@ -1200,6 +1201,16 @@ export default function Motoristas() {
                   <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.email}</p>
                 )}
               </div>
+            </div>
+            {/* Endereço (moved below Telefone/Email) */}
+            <div className="space-y-2">
+              <Label htmlFor="endereco">Endereço</Label>
+              <Input
+                id="endereco"
+                placeholder="Cidade, Estado"
+                value={editedMotorista.endereco || ""}
+                onChange={(e) => setEditedMotorista({ ...editedMotorista, endereco: e.target.value })}
+              />
             </div>
 
             <Separator />
@@ -1271,25 +1282,27 @@ export default function Motoristas() {
 
             {/* Caminhão e Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="caminhao">Caminhão Vinculado</Label>
-                <Select
-                  value={editedMotorista.caminhao_atual || "none"}
-                  onValueChange={(value) => setEditedMotorista({ ...editedMotorista, caminhao_atual: value === "none" ? "" : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um caminhão" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {caminhoesState.map((caminhao) => (
-                      <SelectItem key={caminhao.placa} value={caminhao.placa}>
-                        {caminhao.placa} - {caminhao.modelo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isEditing && (
+                <div className="space-y-2">
+                  <Label htmlFor="caminhao">Caminhão Vinculado</Label>
+                  <Select
+                    value={editedMotorista.caminhao_atual || "none"}
+                    onValueChange={(value) => setEditedMotorista({ ...editedMotorista, caminhao_atual: value === "none" ? "" : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um caminhão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {caminhoesState.map((caminhao) => (
+                        <SelectItem key={caminhao.placa} value={caminhao.placa}>
+                          {caminhao.placa} - {caminhao.modelo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="status">Status *</Label>
                 <Select
