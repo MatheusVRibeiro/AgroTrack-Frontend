@@ -783,9 +783,9 @@ export default function Fazendas() {
                   </div>
                 </CardContent>
                 </Card>
-              ))}
+              );
+              })}
             </div>
-
             {/* Pagination */}
             {totalPages > 1 && (
                             <>
@@ -887,84 +887,8 @@ export default function Fazendas() {
                               </div>
                             </>
                           )}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-blue-600" />
-                            <span className="font-semibold text-sm">{fazenda.mercadoria}</span>
-                          </div>
-                          <Badge variant="outline" className="text-xs">
-                            {fazenda.variedade}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Package className="h-3 w-3" />
-                            Sacas
-                          </p>
-                          <p className="text-2xl font-bold text-blue-600">
-                            {toNumber(fazenda.total_sacas_carregadas).toLocaleString("pt-BR")}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Weight className="h-3 w-3" />
-                            Toneladas
-                          </p>
-                          <p className="text-2xl font-bold text-purple-600">
-                            {toNumber(fazenda.total_toneladas).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/10 rounded-lg border border-green-200/50 dark:border-green-800/50">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" />
-                            Faturamento Total
-                          </span>
-                        </div>
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-500">
-                          R$ {toNumber(fazenda.faturamento_total).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </p>
-                        <div className="mt-2 pt-2 border-t border-green-200/50 dark:border-green-800/50 space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Preço/ton:</span>
-                            <span className="font-semibold">R$ {toNumber(fazenda.preco_por_tonelada).toLocaleString("pt-BR")}</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Preço/saca:</span>
-                            <span className="font-semibold">R$ {precoPorSaca.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Safra {fazenda.safra}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          Último frete: <span className="font-medium">
-                            {fazenda.ultimo_frete_data 
-                              ? format(new Date(fazenda.ultimo_frete_data), "dd/MM/yyyy", { locale: ptBR })
-                              : fazenda.ultimo_frete || "-"
-                            }
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
           </div>
         </div>
-
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-6 flex justify-center">
