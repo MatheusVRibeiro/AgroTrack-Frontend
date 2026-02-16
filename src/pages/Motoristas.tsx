@@ -53,24 +53,23 @@ import type { Motorista } from "@/types";
 // Payload para criar motorista
 interface CriarMotoristaPayload {
   nome: string;
-  cpf: string;
+  cpf?: string | null;
   telefone: string;
-  email: string;
-  cnh: string;
-  cnh_validade: string;
-  cnh_categoria: "A" | "B" | "C" | "D" | "E";
-  tipo: "proprio" | "terceirizado";
-  placa_temporaria?: string | null;
-  data_admissao: string;
-  endereco?: string;
+  email?: string | null;
+  cnh?: string | null;
+  cnh_validade?: string | null;
+  cnh_categoria?: "A" | "B" | "C" | "D" | "E" | null;
+  tipo: "proprio" | "terceirizado" | "agregado";
+  endereco?: string | null;
   status?: "ativo" | "inativo" | "ferias";
   tipo_pagamento?: "pix" | "transferencia_bancaria";
-  chave_pix_tipo?: "cpf" | "email" | "telefone" | "aleatoria";
-  chave_pix?: string;
-  banco?: string;
-  agencia?: string;
-  conta?: string;
-  tipo_conta?: "corrente" | "poupanca";
+  chave_pix_tipo?: "cpf" | "email" | "telefone" | "aleatoria" | null;
+  chave_pix?: string | null;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  tipo_conta?: "corrente" | "poupanca" | null;
+  veiculo_id?: string | null;
 }
 
 // Caminhões serão carregados via API
@@ -84,6 +83,7 @@ const statusConfig = {
 const tipoMotoristaConfig = {
   proprio: { label: "Próprio", variant: "secondary" as const },
   terceirizado: { label: "Terceirizado", variant: "outline" as const },
+  agregado: { label: "Agregado", variant: "warning" as const },
 };
 
 export default function Motoristas() {
@@ -108,13 +108,13 @@ export default function Motoristas() {
   }, []);
 
   // Caminhões carregados via API (substitui dados simulados removidos)
-  const [caminhoesState, setCaminhoesState] = useState<{ placa: string; modelo?: string }[]>([]);
+  const [caminhoesState, setCaminhoesState] = useState<{ id: string; placa: string; modelo?: string }[]>([]);
 
   const carregarCaminhoes = async () => {
     try {
       const res = await caminhoesService.listarCaminhoes();
       if (res.success && Array.isArray(res.data)) {
-        setCaminhoesState(res.data as any);
+        setCaminhoesState(res.data as { id: string; placa: string; modelo?: string }[]);
       } else {
         setCaminhoesState([]);
       }
@@ -159,10 +159,8 @@ export default function Motoristas() {
       cnh_categoria: "D",
       status: "ativo",
       tipo: "proprio",
-      placa_temporaria: "",
-      caminhao_atual: "",
+      veiculo_id: null,
       endereco: "",
-      data_admissao: new Date().toISOString().split('T')[0], // formato YYYY-MM-DD
       tipo_pagamento: "pix",
       chave_pix_tipo: "cpf",
       chave_pix: "",
@@ -176,17 +174,9 @@ export default function Motoristas() {
   };
 
   const handleOpenEditModal = (motorista: Motorista) => {
-    // Normalizar data para formato YYYY-MM-DD se necessário
-    const dataNormalizada = motorista.data_admissao 
-      ? motorista.data_admissao.length > 10 
-        ? motorista.data_admissao.split('T')[0] 
-        : motorista.data_admissao
-      : new Date().toISOString().split('T')[0];
-    
     setEditedMotorista({
       ...motorista,
-      placa_temporaria: motorista.placa_temporaria,
-      data_admissao: dataNormalizada,
+      veiculo_id: motorista.veiculo_id || null,
       cnh_validade: motorista.cnh_validade?.length > 10 
         ? motorista.cnh_validade.split('T')[0]
         : motorista.cnh_validade
@@ -202,29 +192,10 @@ export default function Motoristas() {
   };
 
   const handleSave = async () => {
-    // Resetar erros
     const novosErros: Record<string, string> = {};
 
-    // Validar campos obrigatórios
     if (!editedMotorista.nome?.trim()) {
       novosErros.nome = "Nome é obrigatório";
-    }
-
-    if (!editedMotorista.cpf?.trim()) {
-      novosErros.cpf = "CPF é obrigatório";
-    } else {
-      const cpfLimpo = apenasNumeros(editedMotorista.cpf);
-      if (!validarCPF(cpfLimpo)) {
-        novosErros.cpf = "CPF inválido";
-      } else {
-        // Verificar CPF duplicado
-        const cpfExiste = motoristasState.some(
-          m => apenasNumeros(m.cpf) === cpfLimpo && m.id !== editedMotorista.id
-        );
-        if (cpfExiste) {
-          novosErros.cpf = "Este CPF já está cadastrado";
-        }
-      }
     }
 
     if (!editedMotorista.telefone?.trim()) {
@@ -236,67 +207,32 @@ export default function Motoristas() {
       }
     }
 
-    if (!editedMotorista.email?.trim()) {
-      novosErros.email = "E-mail é obrigatório";
-    } else if (!validarEmail(editedMotorista.email)) {
-      novosErros.email = "E-mail inválido";
-    } else {
-      // Verificar email duplicado
-      const emailExiste = motoristasState.some(
-        m => m.email.toLowerCase() === editedMotorista.email?.toLowerCase() && m.id !== editedMotorista.id
-      );
-      if (emailExiste) {
-        novosErros.email = "Este e-mail já está cadastrado";
-      }
-    }
-
-    if (!editedMotorista.cnh?.trim()) {
-      novosErros.cnh = "CNH é obrigatória";
-    } else if (!validarCNH(editedMotorista.cnh)) {
-      novosErros.cnh = "CNH deve ter 11 dígitos";
-    } else {
-      // Verificar CNH duplicada
-      const cnhExiste = motoristasState.some(
-        m => m.cnh === editedMotorista.cnh && m.id !== editedMotorista.id
-      );
-      if (cnhExiste) {
-        novosErros.cnh = "Esta CNH já está cadastrada";
-      }
-    }
-
-    if (!editedMotorista.cnh_validade) {
-      novosErros.cnh_validade = "Validade da CNH é obrigatória";
-    } else {
-      // Verificar se a CNH está válida
-      const dataValidade = new Date(editedMotorista.cnh_validade);
-      const hoje = new Date();
-      if (dataValidade < hoje) {
-        novosErros.cnh_validade = "CNH vencida";
-      }
-    }
-
-    if (!editedMotorista.cnh_categoria) {
-      novosErros.cnh_categoria = "Categoria da CNH é obrigatória";
-    }
-
     if (!editedMotorista.tipo) {
       novosErros.tipo = "Tipo de motorista é obrigatório";
     }
 
-    if (!editedMotorista.data_admissao) {
-      novosErros.data_admissao = "Data de admissão é obrigatória";
+    if (!editedMotorista.status) {
+      novosErros.status = "Status é obrigatório";
     }
 
-    // Validar dados bancários se preenchidos
+    if (editedMotorista.cpf?.trim()) {
+      const cpfLimpo = apenasNumeros(editedMotorista.cpf);
+      if (!validarCPF(cpfLimpo)) {
+        novosErros.cpf = "CPF inválido";
+      }
+    }
+
+    if (editedMotorista.email?.trim() && !validarEmail(editedMotorista.email)) {
+      novosErros.email = "E-mail inválido";
+    }
+
+    if (editedMotorista.cnh?.trim() && !validarCNH(editedMotorista.cnh)) {
+      novosErros.cnh = "CNH deve ter 11 dígitos";
+    }
+
     if (editedMotorista.tipo_pagamento === "pix") {
       if (!editedMotorista.chave_pix?.trim()) {
         novosErros.chave_pix = "Chave PIX é obrigatória";
-      } else if (editedMotorista.chave_pix_tipo === "cpf" && !validarCPF(apenasNumeros(editedMotorista.chave_pix))) {
-        novosErros.chave_pix = "CPF inválido";
-      } else if (editedMotorista.chave_pix_tipo === "email" && !validarEmail(editedMotorista.chave_pix)) {
-        novosErros.chave_pix = "E-mail inválido";
-      } else if (editedMotorista.chave_pix_tipo === "telefone" && !validarTelefone(apenasNumeros(editedMotorista.chave_pix))) {
-        novosErros.chave_pix = "Telefone inválido";
       }
     } else if (editedMotorista.tipo_pagamento === "transferencia_bancaria") {
       if (!editedMotorista.banco?.trim()) {
@@ -310,22 +246,10 @@ export default function Motoristas() {
       }
     }
 
-    // Se houver erros, exibir e retornar
     if (Object.keys(novosErros).length > 0) {
       setErrosCampos(novosErros);
       const primeiroErro = Object.keys(novosErros)[0];
-      const mensagemErro = novosErros[primeiroErro];
-      toast.error(`Erro: ${mensagemErro}`);
-      
-      // Tentar focar no primeiro campo com erro
-      setTimeout(() => {
-        const elemento = document.getElementById(primeiroErro);
-        if (elemento) {
-          elemento.focus();
-          elemento.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 100);
-      
+      toast.error(`Erro: ${novosErros[primeiroErro]}`);
       return;
     }
 
@@ -336,72 +260,63 @@ export default function Motoristas() {
       return;
     }
 
-    // Criar payload para API com dados limpos de formatação
-    // IMPORTANTE: A API espera dados sem máscara/formatação
-    // Regra: se for 'proprio', não enviar placa_temporaria (define como null)
-    const placaParaEnviar = editedMotorista.tipo === 'proprio' ? null : (editedMotorista.placa_temporaria || null);
-
-    const payload: CriarMotoristaPayload = {
-      nome: editedMotorista.nome,
-      cpf: apenasNumeros(editedMotorista.cpf), // Remove formatação (000.000.000-00 -> 00000000000)
-      telefone: apenasNumeros(editedMotorista.telefone), // Remove formatação ((11) 98765-4321 -> 11987654321)
-      email: editedMotorista.email,
-      cnh: apenasNumeros(editedMotorista.cnh), // Remove formatação (apenas números)
-      cnh_validade: editedMotorista.cnh_validade, // Mantém formato de data: YYYY-MM-DD
-      cnh_categoria: editedMotorista.cnh_categoria!,
-      tipo: editedMotorista.tipo!,
-      placa_temporaria: placaParaEnviar,
-      data_admissao: editedMotorista.data_admissao, // Formato YYYY-MM-DD (normalizador no handleOpenEditModal)
-      endereco: editedMotorista.endereco,
+    const payloadBase: CriarMotoristaPayload = {
+      nome: editedMotorista.nome?.trim() || "",
+      cpf: editedMotorista.cpf ? apenasNumeros(editedMotorista.cpf) : null,
+      telefone: apenasNumeros(editedMotorista.telefone || ""),
+      email: editedMotorista.email || null,
+      cnh: editedMotorista.cnh ? apenasNumeros(editedMotorista.cnh) : null,
+      cnh_validade: editedMotorista.cnh_validade || null,
+      cnh_categoria: editedMotorista.cnh_categoria || null,
+      tipo: editedMotorista.tipo as "proprio" | "terceirizado" | "agregado",
+      endereco: editedMotorista.endereco || null,
       status: editedMotorista.status || "ativo",
       tipo_pagamento: editedMotorista.tipo_pagamento,
-      chave_pix_tipo: editedMotorista.chave_pix_tipo,
-      chave_pix: editedMotorista.chave_pix_tipo === "cpf" ? apenasNumeros(editedMotorista.chave_pix) : editedMotorista.chave_pix, // Limpa se for CPF
-      banco: editedMotorista.banco,
-      agencia: editedMotorista.agencia,
-      conta: editedMotorista.conta,
-      tipo_conta: editedMotorista.tipo_conta,
+      chave_pix_tipo: editedMotorista.tipo_pagamento === "pix" ? editedMotorista.chave_pix_tipo || "cpf" : null,
+      chave_pix: editedMotorista.tipo_pagamento === "pix"
+        ? ((editedMotorista.chave_pix_tipo === "cpf" && editedMotorista.chave_pix)
+          ? apenasNumeros(editedMotorista.chave_pix)
+          : editedMotorista.chave_pix || null)
+        : null,
+      banco: editedMotorista.tipo_pagamento === "transferencia_bancaria" ? editedMotorista.banco || null : null,
+      agencia: editedMotorista.tipo_pagamento === "transferencia_bancaria" ? editedMotorista.agencia || null : null,
+      conta: editedMotorista.tipo_pagamento === "transferencia_bancaria" ? editedMotorista.conta || null : null,
+      tipo_conta: editedMotorista.tipo_pagamento === "transferencia_bancaria" ? editedMotorista.tipo_conta || "corrente" : null,
+      veiculo_id: editedMotorista.veiculo_id || null,
     };
+
+    const payload = Object.fromEntries(
+      Object.entries(payloadBase).map(([key, value]) => [key, value === "" ? null : value])
+    ) as CriarMotoristaPayload;
 
     try {
       const res = await motoristasService.criarMotorista(payload);
-      
-      if (res.success) {
-        toast.success("Motorista cadastrado com sucesso!");
-        // Recarregar lista local
-        await carregarMotoristas();
-        // Invalidar cache para outras telas (ex: Frota)
-        queryClient.invalidateQueries({ queryKey: ["motoristas"] });
 
-        // Garantir que o motorista recém-criado não esteja vinculado a um caminhão.
-        // Alguns backends podem retornar o recurso criado de forma diferente, então
-        // buscamos a lista atualizada e localizamos pelo CPF limpado.
-        try {
-          const latest = await motoristasService.listarMotoristas();
-          if (latest.success && Array.isArray(latest.data)) {
-            const cpfCriado = apenasNumeros(payload.cpf as string);
-            const encontrado = latest.data.find((m) => apenasNumeros(m.cpf) === cpfCriado);
-            if (encontrado && encontrado.caminhao_atual) {
-              await motoristasService.atualizarMotorista(encontrado.id, { caminhao_atual: null });
-              await carregarMotoristas();
-              queryClient.invalidateQueries({ queryKey: ["motoristas"] });
+      if (res.success && res.data) {
+        const motoristaCriadoId = res.data.id;
+
+        if (payload.veiculo_id && motoristaCriadoId) {
+          try {
+            const vinculoRes = await caminhoesService.atualizarCaminhao(payload.veiculo_id, {
+              motorista_fixo_id: motoristaCriadoId,
+            });
+
+            if (!vinculoRes.success) {
+              toast.warning("Motorista criado, mas o vínculo com o veículo não foi concluído.");
             }
+          } catch (vinculoError) {
+            console.error("Falha ao vincular motorista ao veículo:", vinculoError);
+            toast.warning("Motorista criado, mas houve falha ao vincular o veículo.");
           }
-        } catch (e) {
-          // não bloquear o fluxo se a limpeza falhar
         }
 
+        toast.success("Motorista cadastrado com sucesso!");
+        await carregarMotoristas();
+        queryClient.invalidateQueries({ queryKey: ["motoristas"] });
+        queryClient.invalidateQueries({ queryKey: ["caminhoes"] });
         setIsModalOpen(false);
         setErrosCampos({});
       } else {
-        // Tentar identificar qual campo tem erro baseado na mensagem
-        if (res.message?.toLowerCase().includes('cpf')) {
-          setErrosCampos({ cpf: res.message });
-        } else if (res.message?.toLowerCase().includes('email')) {
-          setErrosCampos({ email: res.message });
-        } else if (res.message?.toLowerCase().includes('cnh')) {
-          setErrosCampos({ cnh: res.message });
-        }
         toast.error(res.message || "Erro ao cadastrar motorista");
       }
     } catch (error) {
@@ -719,6 +634,7 @@ export default function Motoristas() {
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="proprio">Próprio</SelectItem>
               <SelectItem value="terceirizado">Terceirizado</SelectItem>
+              <SelectItem value="agregado">Agregado</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1085,10 +1001,10 @@ export default function Motoristas() {
           </DialogHeader>
 
           <div className="space-y-4 max-h-[calc(90vh-200px)] overflow-y-auto px-1">
-            {/* Nome e CPF */}
+            {/* Linha 1: Nome e CPF */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nome">Nome Completo *</Label>
+                <Label htmlFor="nome">Nome Completo <span className="text-red-500">*</span></Label>
                 <Input
                   id="nome"
                   placeholder="João Silva"
@@ -1099,12 +1015,11 @@ export default function Motoristas() {
                   }}
                   className={errosCampos.nome ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
-                {errosCampos.nome && (
-                  <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.nome}</p>
-                )}
+                {errosCampos.nome && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.nome}</p>}
               </div>
+
               <InputMascarado
-                label="CPF *"
+                label="CPF"
                 id="cpf"
                 tipoMascara="cpf"
                 placeholder="000.000.000-00"
@@ -1113,53 +1028,11 @@ export default function Motoristas() {
                   setEditedMotorista({ ...editedMotorista, cpf: e.target.value });
                   setErrosCampos({ ...errosCampos, cpf: "" });
                 }}
-                onBlur={(e) => {
-                  const cpfLimpo = apenasNumeros(e.target.value);
-                  if (cpfLimpo && !validarCPF(cpfLimpo)) {
-                    setErrosCampos({ ...errosCampos, cpf: "CPF inválido" });
-                  }
-                }}
                 erro={errosCampos.cpf}
               />
             </div>
 
-            {/* Tipo e Placa Temporária (aparece logo abaixo de Nome/CPF) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo *</Label>
-                <Select
-                  value={editedMotorista.tipo || "proprio"}
-                  onValueChange={(value: "proprio" | "terceirizado") =>
-                    setEditedMotorista({ ...editedMotorista, tipo: value, placa_temporaria: value === "proprio" ? "" : editedMotorista.placa_temporaria })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="proprio">Próprio</SelectItem>
-                    <SelectItem value="terceirizado">Terceirizado</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errosCampos.tipo && (
-                  <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.tipo}</p>
-                )}
-              </div>
-
-              {editedMotorista.tipo === "terceirizado" && (
-                <div className="space-y-2">
-                  <Label htmlFor="placa_temporaria">Placa temporária</Label>
-                  <Input
-                    id="placa_temporaria"
-                    placeholder="ABC1D23"
-                    value={editedMotorista.placa_temporaria || ""}
-                    onChange={(e) => setEditedMotorista({ ...editedMotorista, placa_temporaria: e.target.value.toUpperCase() })}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Telefone e Email */}
+            {/* Linha 2: Telefone e E-mail */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InputMascarado
                 label="Telefone *"
@@ -1171,16 +1044,11 @@ export default function Motoristas() {
                   setEditedMotorista({ ...editedMotorista, telefone: e.target.value });
                   setErrosCampos({ ...errosCampos, telefone: "" });
                 }}
-                onBlur={(e) => {
-                  const telefoneLimpo = apenasNumeros(e.target.value);
-                  if (telefoneLimpo && !validarTelefone(telefoneLimpo)) {
-                    setErrosCampos({ ...errosCampos, telefone: "Telefone inválido" });
-                  }
-                }}
                 erro={errosCampos.telefone}
               />
+
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail *</Label>
+                <Label htmlFor="email">E-mail</Label>
                 <Input
                   id="email"
                   type="email"
@@ -1190,35 +1058,97 @@ export default function Motoristas() {
                     setEditedMotorista({ ...editedMotorista, email: e.target.value });
                     setErrosCampos({ ...errosCampos, email: "" });
                   }}
-                  onBlur={(e) => {
-                    if (e.target.value && !validarEmail(e.target.value)) {
-                      setErrosCampos({ ...errosCampos, email: "E-mail inválido" });
-                    }
-                  }}
                   className={errosCampos.email ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
-                {errosCampos.email && (
-                  <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.email}</p>
-                )}
+                {errosCampos.email && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.email}</p>}
               </div>
             </div>
-            {/* Endereço (moved below Telefone/Email) */}
-            <div className="space-y-2">
-              <Label htmlFor="endereco">Endereço</Label>
-              <Input
-                id="endereco"
-                placeholder="Cidade, Estado"
-                value={editedMotorista.endereco || ""}
-                onChange={(e) => setEditedMotorista({ ...editedMotorista, endereco: e.target.value })}
-              />
+
+            {/* Linha 3: Tipo e Veículo Vinculado */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tipo">Tipo <span className="text-red-500">*</span></Label>
+                <Select
+                  value={editedMotorista.tipo || "proprio"}
+                  onValueChange={(value: "proprio" | "terceirizado" | "agregado") => {
+                    setEditedMotorista({
+                      ...editedMotorista,
+                      tipo: value,
+                    });
+                    setErrosCampos({ ...errosCampos, tipo: "" });
+                  }}
+                >
+                  <SelectTrigger className={errosCampos.tipo ? "border-red-500 focus:ring-red-500" : ""}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="proprio">Próprio</SelectItem>
+                    <SelectItem value="terceirizado">Terceirizado</SelectItem>
+                    <SelectItem value="agregado">Agregado</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errosCampos.tipo && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.tipo}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="veiculo_id">Veículo Vinculado</Label>
+                <Select
+                  value={editedMotorista.veiculo_id || "none"}
+                  onValueChange={(value) => setEditedMotorista({ ...editedMotorista, veiculo_id: value === "none" ? null : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um veículo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {caminhoesState.map((caminhao) => (
+                      <SelectItem key={caminhao.id} value={caminhao.id}>
+                        {caminhao.placa} {caminhao.modelo ? `- ${caminhao.modelo}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <Separator />
+            {/* Linha 4: Endereço e Status */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="endereco">Endereço</Label>
+                <Input
+                  id="endereco"
+                  placeholder="Cidade, Estado"
+                  value={editedMotorista.endereco || ""}
+                  onChange={(e) => setEditedMotorista({ ...editedMotorista, endereco: e.target.value })}
+                />
+              </div>
 
-            {/* CNH */}
+              <div className="space-y-2">
+                <Label htmlFor="status">Status <span className="text-red-500">*</span></Label>
+                <Select
+                  value={editedMotorista.status || "ativo"}
+                  onValueChange={(value: "ativo" | "inativo" | "ferias") => {
+                    setEditedMotorista({ ...editedMotorista, status: value });
+                    setErrosCampos({ ...errosCampos, status: "" });
+                  }}
+                >
+                  <SelectTrigger className={errosCampos.status ? "border-red-500 focus:ring-red-500" : ""}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="inativo">Inativo</SelectItem>
+                    <SelectItem value="ferias">Férias</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errosCampos.status && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.status}</p>}
+              </div>
+            </div>
+
+            {/* Linha 5: CNH, Validade e Categoria */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <InputMascarado
-                label="CNH *"
+                label="CNH"
                 id="cnh"
                 tipoMascara="numero"
                 placeholder="00000000000"
@@ -1228,15 +1158,11 @@ export default function Motoristas() {
                   setEditedMotorista({ ...editedMotorista, cnh: e.target.value });
                   setErrosCampos({ ...errosCampos, cnh: "" });
                 }}
-                onBlur={(e) => {
-                  if (e.target.value && !validarCNH(e.target.value)) {
-                    setErrosCampos({ ...errosCampos, cnh: "CNH deve ter 11 dígitos" });
-                  }
-                }}
                 erro={errosCampos.cnh}
               />
+
               <div className="space-y-2">
-                <Label htmlFor="cnh_validade">Validade CNH *</Label>
+                <Label htmlFor="cnh_validade">Validade da CNH</Label>
                 <Input
                   id="cnh_validade"
                   type="date"
@@ -1247,22 +1173,14 @@ export default function Motoristas() {
                   }}
                   className={errosCampos.cnh_validade ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
-                {editedMotorista.cnh_validade && (
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    ✓ Data: {formatarDataBrasileira(editedMotorista.cnh_validade)}
-                  </p>
-                )}
-                {errosCampos.cnh_validade && (
-                  <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.cnh_validade}</p>
-                )}
+                {errosCampos.cnh_validade && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.cnh_validade}</p>}
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="cnhCategoria">Categoria CNH *</Label>
+                <Label htmlFor="cnhCategoria">Categoria</Label>
                 <Select
                   value={editedMotorista.cnh_categoria || ""}
-                  onValueChange={(value: "A" | "B" | "C" | "D" | "E") => 
-                    setEditedMotorista({ ...editedMotorista, cnh_categoria: value })
-                  }
+                  onValueChange={(value: "A" | "B" | "C" | "D" | "E") => setEditedMotorista({ ...editedMotorista, cnh_categoria: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a categoria" />
@@ -1276,87 +1194,6 @@ export default function Motoristas() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <Separator />
-
-            {/* Caminhão e Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {isEditing && (
-                <div className="space-y-2">
-                  <Label htmlFor="caminhao">Caminhão Vinculado</Label>
-                  <Select
-                    value={editedMotorista.caminhao_atual || "none"}
-                    onValueChange={(value) => setEditedMotorista({ ...editedMotorista, caminhao_atual: value === "none" ? "" : value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um caminhão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      {caminhoesState.map((caminhao) => (
-                        <SelectItem key={caminhao.placa} value={caminhao.placa}>
-                          {caminhao.placa} - {caminhao.modelo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="status">Status *</Label>
-                <Select
-                  value={editedMotorista.status || "ativo"}
-                  onValueChange={(value: "ativo" | "inativo" | "ferias") => 
-                    setEditedMotorista({ ...editedMotorista, status: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="inativo">Inativo</SelectItem>
-                    <SelectItem value="ferias">Férias</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            
-
-            {/* Data de Admissão */}
-            <div className="space-y-2">
-              <Label htmlFor="data_admissao">Data de Admissão *</Label>
-              <Input
-                id="data_admissao"
-                type="date"
-                value={editedMotorista.data_admissao || ""}
-                onChange={(e) => {
-                  setEditedMotorista({ ...editedMotorista, data_admissao: e.target.value });
-                  setErrosCampos({ ...errosCampos, data_admissao: "" });
-                }}
-                className={errosCampos.data_admissao ? "border-red-500 focus-visible:ring-red-500" : ""}
-              />
-              {editedMotorista.data_admissao && (
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  ✓ Data: {formatarDataBrasileira(editedMotorista.data_admissao)}
-                </p>
-              )}
-              {errosCampos.data_admissao && (
-                <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.data_admissao}</p>
-              )}
-            </div>
-
-            {/* Endereço */}
-            <div className="space-y-2">
-              <Label htmlFor="endereco">Endereço</Label>
-              <Input
-                id="endereco"
-                placeholder="Cidade, Estado"
-                value={editedMotorista.endereco || ""}
-                onChange={(e) => setEditedMotorista({ ...editedMotorista, endereco: e.target.value })}
-              />
             </div>
 
             <Separator />
