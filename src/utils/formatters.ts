@@ -21,6 +21,28 @@ export const formatarCPF = (valor: string): string => {
     .substring(0, 14);
 };
 
+export const formatarCNPJ = (valor: string): string => {
+  if (!valor) return '';
+  const limpo = valor.replace(/\D/g, '');
+  return limpo
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2')
+    .substring(0, 18);
+};
+
+/**
+ * Formata documento (CPF ou CNPJ) dependendo do tamanho dos dígitos.
+ * Se tiver até 11 dígitos -> CPF, senão CNPJ.
+ */
+export const formatarDocumento = (valor: string | undefined | null): string => {
+  if (!valor) return '';
+  const limpo = String(valor).replace(/\D/g, '');
+  if (limpo.length <= 11) return formatarCPF(limpo);
+  return formatarCNPJ(limpo);
+};
+
 export const formatarTelefone = (valor: string): string => {
   const limpo = valor.replace(/\D/g, '');
   if (limpo.length <= 10) {

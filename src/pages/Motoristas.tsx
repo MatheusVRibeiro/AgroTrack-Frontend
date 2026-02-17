@@ -20,7 +20,7 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination";
 import { InputMascarado } from "@/components/InputMascarado";
-import { validarCPF, validarEmail, validarCNH, validarTelefone, apenasNumeros, formatarDataBrasileira, converterDataBrasileira, formatarCPF, formatarTelefone } from "@/utils/formatters";
+import { validarCPF, validarEmail, validarCNH, validarTelefone, apenasNumeros, formatarDataBrasileira, converterDataBrasileira, formatarDocumento, formatarTelefone } from "@/utils/formatters";
 import * as motoristasService from "@/services/motoristas";
 import {
   Select,
@@ -53,7 +53,7 @@ import type { Motorista } from "@/types";
 // Payload para criar motorista
 interface CriarMotoristaPayload {
   nome: string;
-  cpf?: string | null;
+  documento?: string | null;
   telefone: string;
   email: string;
   // cnh removido do banco e do payload
@@ -129,7 +129,7 @@ export default function Motoristas() {
   const handleOpenNewModal = () => {
     setEditedMotorista({
       nome: "",
-      cpf: "",
+        documento: "",
       telefone: "",
       email: "",
       status: "ativo",
@@ -223,9 +223,9 @@ export default function Motoristas() {
       status: editedMotorista.status || "ativo",
       tipo_pagamento: editedMotorista.tipo_pagamento || 'pix',
     };
-    // Adiciona CPF se preenchido
-    if (editedMotorista.cpf && editedMotorista.cpf.trim() !== "") {
-      payload.cpf = apenasNumeros(editedMotorista.cpf);
+    // Adiciona documento (CPF/CNPJ) se preenchido
+    if (editedMotorista.documento && editedMotorista.documento.trim() !== "") {
+      payload.documento = apenasNumeros(editedMotorista.documento);
     }
 
 
@@ -277,7 +277,7 @@ export default function Motoristas() {
   const filteredData = motoristasState.filter((motorista) => {
     const matchesSearch =
       motorista.nome.toLowerCase().includes(search.toLowerCase()) ||
-      motorista.cpf.includes(search);
+        String(motorista.documento || '').includes(search);
     const matchesStatus =
       statusFilter === "all" || motorista.status === statusFilter;
     const matchesTipo =
@@ -336,7 +336,7 @@ export default function Motoristas() {
               {/* Exibe o código do motorista */}
               <span className="ml-2 font-mono text-xs text-primary">{item.codigo_motorista}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{formatarCPF(item.cpf)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{formatarDocumento(item.documento)}</p>
             <div className="mt-1 flex items-center gap-2">
               <Badge variant={statusConfig[item.status].variant} className="text-[10px]">
                 {statusConfig[item.status].label}
@@ -507,7 +507,7 @@ export default function Motoristas() {
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Buscar</Label>
                 <Input
-                  placeholder="Buscar por nome ou CPF..."
+                  placeholder="Buscar por nome ou documento..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -557,7 +557,7 @@ export default function Motoristas() {
         className="hidden lg:flex"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Buscar por nome ou CPF..."
+        searchPlaceholder="Buscar por nome ou documento..."
       >
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground block">Status</Label>
@@ -753,7 +753,7 @@ export default function Motoristas() {
                       <p className="text-2xl font-bold mb-1">{selectedMotorista.nome}</p>
                       {/* Exibe o código do motorista */}
                       <p className="font-mono text-primary mb-2">{selectedMotorista.codigo_motorista}</p>
-                      <p className="text-muted-foreground mb-2">{selectedMotorista.cpf}</p>
+                      <p className="text-muted-foreground mb-2">{formatarDocumento(selectedMotorista.documento)}</p>
                       <div className="flex items-center gap-2">
                         <Badge
                           variant={statusConfig[selectedMotorista.status].variant}
@@ -940,7 +940,7 @@ export default function Motoristas() {
           </DialogHeader>
 
           <div className="space-y-4 max-h-[calc(90vh-200px)] overflow-y-auto px-1">
-            {/* Linha 1: Nome e CPF */}
+            {/* Linha 1: Nome e Documento */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="nome">Nome Completo <span className="text-red-500">*</span></Label>
@@ -958,16 +958,16 @@ export default function Motoristas() {
               </div>
 
               <InputMascarado
-                label="CPF"
-                id="cpf"
-                tipoMascara="cpf"
-                placeholder="000.000.000-00"
-                value={editedMotorista.cpf || ""}
+                label="CPF ou CNPJ"
+                id="documento"
+                tipoMascara="documento"
+                placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                value={editedMotorista.documento || ""}
                 onChange={(e) => {
-                  setEditedMotorista({ ...editedMotorista, cpf: e.target.value });
-                  setErrosCampos({ ...errosCampos, cpf: "" });
+                  setEditedMotorista({ ...editedMotorista, documento: e.target.value });
+                  setErrosCampos({ ...errosCampos, documento: "" });
                 }}
-                erro={errosCampos.cpf}
+                erro={errosCampos.documento}
               />
             </div>
 

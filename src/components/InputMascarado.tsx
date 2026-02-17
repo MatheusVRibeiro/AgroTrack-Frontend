@@ -5,12 +5,13 @@ import {
   formatarCPF, 
   formatarTelefone, 
   formatarCEP, 
+  formatarDocumento,
   apenasNumeros 
 } from '@/utils/formatters';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
-  tipoMascara?: 'cpf' | 'telefone' | 'cep' | 'numero';
+  tipoMascara?: 'cpf' | 'documento' | 'telefone' | 'cep' | 'numero';
   erro?: string;
 }
 
@@ -27,7 +28,8 @@ export const InputMascarado: React.FC<InputProps> = ({
     let valor = e.target.value;
 
     // Aplica a máscara em tempo real conforme o tipo
-    if (tipoMascara === 'cpf') valor = formatarCPF(valor);
+      if (tipoMascara === 'cpf') valor = formatarCPF(valor);
+      if (tipoMascara === 'documento') valor = formatarDocumento(valor);
     if (tipoMascara === 'telefone') valor = formatarTelefone(valor);
     if (tipoMascara === 'cep') valor = formatarCEP(valor);
     if (tipoMascara === 'numero') valor = apenasNumeros(valor);

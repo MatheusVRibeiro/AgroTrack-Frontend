@@ -57,7 +57,7 @@ export interface Motorista {
     codigo_motorista: string;
   id: string;
   nome: string;
-  cpf: string;
+  documento: string;
   telefone: string;
   email: string;
   cnh: string;

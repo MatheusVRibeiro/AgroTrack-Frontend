@@ -40,6 +40,7 @@ import caminhoesService from "@/services/caminhoes";
 import motoristasService from "@/services/motoristas";
 import type { Caminhao, CriarCaminhaoPayload, Motorista } from "@/types";
 import { formatPlaca, emptyToNull } from "@/lib/utils";
+import { formatarDocumento } from '@/utils/formatters';
 
 const statusConfig = {
   disponivel: { label: "Disponível", variant: "active" as const },
@@ -945,7 +946,7 @@ export default function Frota() {
                       <div className="space-y-2">
                         <p className="font-semibold text-lg text-blue-700 dark:text-blue-300">{motorista.nome}</p>
                         <div className="flex items-center gap-4 text-sm">
-                          <span className="text-muted-foreground">CPF: {motorista.cpf}</span>
+                          <span className="text-muted-foreground">Documento: {formatarDocumento(motorista.documento)}</span>
                           <Badge variant={motorista.tipo === "proprio" ? "default" : "outline"}>
                             {motorista.tipo === "proprio" ? "Próprio" : "Terceirizado"}
                           </Badge>
