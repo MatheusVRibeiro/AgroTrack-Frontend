@@ -35,41 +35,53 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    // Client-side validation
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      toast.error("Email inválido", { description: "Informe um email com formato válido." });
+      setError("Email inválido");
+      return;
+    }
 
-    if (!email.trim() || !password.trim()) {
-      toast.error("❌ Campos obrigatórios vazios", {
-        description: "Preencha email e senha para continuar.",
-      });
-      setError("Preencha todos os campos");
+    if (String(password ?? "").length < 6) {
+      toast.error("Senha muito curta", { description: "A senha deve ter pelo menos 6 caracteres." });
+      setError("Senha muito curta");
       return;
     }
 
     setIsSubmitting(true);
     const toastId = toast.loading("🔓 Autenticando...");
-    
-    const success = await login(email, password);
 
-    if (success) {
-      toast.dismiss(toastId);
-      toast.success("✅ Login realizado com sucesso!", {
-        description: "Bem-vindo de volta!",
-        duration: 3000,
-      });
+    const res = await login(email, password);
+
+    toast.dismiss(toastId);
+
+    if (res.success) {
+      toast.success("✅ Login realizado com sucesso!", { description: "Bem-vindo de volta!", duration: 3000 });
+      // store normalized email when remembering
       if (rememberMe) {
-        localStorage.setItem("@CaramelloLogistica:savedEmail", email);
+        localStorage.setItem("@CaramelloLogistica:savedEmail", normalizedEmail);
       } else {
         localStorage.removeItem("@CaramelloLogistica:savedEmail");
       }
       navigate(from, { replace: true });
-    } else {
-      toast.dismiss(toastId);
-      toast.error("❌ Falha na autenticação", {
-        description: "Verifique suas credenciais e tente novamente.",
-        duration: 4000,
-      });
-      setError("Usuário ou senha inválidos");
-      setIsSubmitting(false);
+      return;
     }
+
+    // Handle specific HTTP statuses
+    if (res.status === 401) {
+      toast.error("Credenciais inválidas", { description: res.message ?? "Email ou senha incorretos." });
+      setError("Usuário ou senha inválidos");
+    } else if (res.status === 403) {
+      toast.error(res.message ?? "Conta bloqueada/inativa");
+      setError(res.message ?? "Conta bloqueada/inativa");
+    } else {
+      toast.error("Falha na autenticação", { description: res.message ?? "Tente novamente mais tarde." });
+      setError(res.message ?? "Falha na autenticação");
+    }
+
+    setIsSubmitting(false);
   };
 
   return (

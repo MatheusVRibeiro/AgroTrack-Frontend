@@ -13,6 +13,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
   tipoMascara?: 'cpf' | 'documento' | 'telefone' | 'cep' | 'numero';
   erro?: string;
+  onDetectTipoDocumento?: (tipo: 'cpf' | 'cnpj') => void;
 }
 
 export const InputMascarado: React.FC<InputProps> = ({ 
@@ -21,6 +22,7 @@ export const InputMascarado: React.FC<InputProps> = ({
   erro, 
   onChange, 
   value, 
+  onDetectTipoDocumento,
   ...props 
 }) => {
   
@@ -29,7 +31,13 @@ export const InputMascarado: React.FC<InputProps> = ({
 
     // Aplica a máscara em tempo real conforme o tipo
       if (tipoMascara === 'cpf') valor = formatarCPF(valor);
-      if (tipoMascara === 'documento') valor = formatarDocumento(valor);
+      if (tipoMascara === 'documento') {
+        // Detecta dinamicamente CPF vs CNPJ durante digitação
+        const limpo = apenasNumeros(valor);
+        const tipoDetectado = limpo.length > 11 ? 'cnpj' : 'cpf';
+        if (onDetectTipoDocumento) onDetectTipoDocumento(tipoDetectado);
+        valor = formatarDocumento(valor);
+      }
     if (tipoMascara === 'telefone') valor = formatarTelefone(valor);
     if (tipoMascara === 'cep') valor = formatarCEP(valor);
     if (tipoMascara === 'numero') valor = apenasNumeros(valor);

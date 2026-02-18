@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -41,6 +42,7 @@ import motoristasService from "@/services/motoristas";
 import type { Caminhao, CriarCaminhaoPayload, Motorista } from "@/types";
 import { formatPlaca, emptyToNull } from "@/lib/utils";
 import { formatarDocumento } from '@/utils/formatters';
+import { ITEMS_PER_PAGE } from "@/lib/pagination";
 
 const statusConfig = {
   disponivel: { label: "Disponível", variant: "active" as const },
@@ -58,7 +60,7 @@ export default function Frota() {
   const [selectedCaminhao, setSelectedCaminhao] = useState<Caminhao | null>(null);
   const [editedCaminhao, setEditedCaminhao] = useState<Partial<CriarCaminhaoPayload>>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = ITEMS_PER_PAGE;
 
   // Query para buscar caminhões
   const { data: caminhoesResponse, isLoading } = useQuery({
@@ -167,6 +169,17 @@ export default function Frota() {
     setAutoFilledFields({});
     setIsModalOpen(true);
   };
+
+    // Abrir modal de edição quando rota /frota/editar/:id for acessada
+    const frotaParams = useParams();
+    useEffect(() => {
+      const idParam = frotaParams.id;
+      if (!idParam) return;
+      if (!isLoading && caminhoes.length > 0) {
+        const found = caminhoes.find((c) => String(c.id) === String(idParam));
+        if (found) handleOpenEditModal(found);
+      }
+    }, [frotaParams.id, isLoading, caminhoes]);
 
   
 

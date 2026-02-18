@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -59,6 +60,7 @@ import {
 } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ITEMS_PER_PAGE } from "@/lib/pagination";
 
 const tipoConfig = {
   combustivel: { label: "Combustível", icon: Fuel, color: "text-warning" },
@@ -165,7 +167,7 @@ export default function Custos() {
   const [selectedCusto, setSelectedCusto] = useState<Custo | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = ITEMS_PER_PAGE;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showAllCombustivel, setShowAllCombustivel] = useState(false);
   const [showAllManutencao, setShowAllManutencao] = useState(false);
@@ -205,6 +207,17 @@ export default function Custos() {
     });
     setIsModalOpen(true);
   };
+
+    // Abrir modal de edição quando rota /custos/editar/:id for acessada
+    const custosParams = useParams();
+    useEffect(() => {
+      const idParam = custosParams.id;
+      if (!idParam) return;
+      if (!isLoading && custos.length > 0) {
+        const found = custos.find((c) => String(c.id) === String(idParam));
+        if (found) handleOpenEditModal(found);
+      }
+    }, [custosParams.id, isLoading, custos]);
 
   const handleOpenEditModal = (custo: Custo) => {
     setEditingCusto(custo);

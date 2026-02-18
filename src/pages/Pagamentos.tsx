@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -69,6 +70,7 @@ import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ITEMS_PER_PAGE } from "@/lib/pagination";
 
 // PDF helpers
 import jsPDF from "jspdf";
@@ -238,7 +240,7 @@ export default function Pagamentos() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFretes, setSelectedFretes] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = ITEMS_PER_PAGE;
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const clearFilters = () => {
@@ -444,6 +446,17 @@ export default function Pagamentos() {
     setIsEditing(true);
     setIsModalOpen(true);
   };
+
+  // Abrir modal de edição quando rota /pagamentos/editar/:id for acessada
+  const pagamentosParams = useParams();
+  useEffect(() => {
+    const idParam = pagamentosParams.id;
+    if (!idParam) return;
+    if (!isLoadingPagamentos && pagamentosApi.length > 0) {
+      const found = pagamentosApi.find((p) => String(p.id) === String(idParam));
+      if (found) handleOpenEditModal(found as unknown as PagamentoMotorista);
+    }
+  }, [pagamentosParams.id, isLoadingPagamentos, pagamentosApi]);
 
   const handleMotoristaChange = (motoristaId: string) => {
     // Handle clearing selection (placeholder uses 'none')

@@ -1,57 +1,24 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import * as authService from "@/services/auth";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "operador" | "motorista";
-}
+import type { ApiResponse, User } from "@/types";
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<ApiResponse<any>>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Simulated users for demo
-const DEMO_USERS: Record<string, { password: string; user: User }> = {
-  "admin@gmail.com": {
-    password: "senha123",
-    user: {
-      id: "USR-177084976159115431",
-      name: "Matheusss",
-      email: "admin@gmail.com",
-      role: "admin",
-    },
-  },
-  "admin@caramello.com": {
-    password: "admin123",
-    user: {
-      id: "1",
-      name: "Administrador",
-      email: "admin@caramello.com",
-      role: "admin",
-    },
-  },
-  "operador@caramello.com": {
-    password: "operador123",
-    user: {
-      id: "2",
-      name: "Operador",
-      email: "operador@caramello.com",
-      role: "operador",
-    },
-  },
-};
+// (demo users removed) 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check for stored session on mount
@@ -67,49 +34,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<ApiResponse<any>> => {
     setIsLoading(true);
 
     // Try backend authentication first
     try {
       const res = await authService.login(email, password);
-      
+
       if (res.success && res.data) {
         const { user, token } = res.data;
-        
+
         setUser(user);
         localStorage.setItem("caramello_logistica_user", JSON.stringify(user));
         if (token) localStorage.setItem("@CaramelloLogistica:token", token);
-        
+
         setIsLoading(false);
-        return true;
+        return res;
       }
-    } catch (e) {
-      // ignore and fallback to demo users
-    }
 
-    // Fallback to demo users (local development)
-    const normalizedEmail = email.toLowerCase().trim();
-    const demoUser = DEMO_USERS[normalizedEmail];
-
-    if (demoUser && demoUser.password === password) {
-      setUser(demoUser.user);
-      localStorage.setItem("caramello_logistica_user", JSON.stringify(demoUser.user));
-      // Clear any stored token when using demo
-      localStorage.removeItem("@CaramelloLogistica:token");
+      // If backend returned an explicit failure, return it to the caller so UI can react to status/message
       setIsLoading(false);
-      return true;
+      return res;
+    } catch (e) {
+      // Authentication failed (network or server error)
     }
 
     setIsLoading(false);
-    return false;
+    return { success: false, data: null, message: "Credenciais inválidas", status: 401 };
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem("caramello_logistica_user");
     localStorage.removeItem("@CaramelloLogistica:token");
-    window.location.href = "/login";
+    navigate("/login");
   };
 
   return (

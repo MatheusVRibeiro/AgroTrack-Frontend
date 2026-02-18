@@ -64,6 +64,62 @@ const App = () => (
               }
             />
             <Route
+              path="/motoristas/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Motoristas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fazendas/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Fazendas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/frota/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Frota />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fretes/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Fretes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/custos/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Custos />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pagamentos/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Pagamentos />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/motoristas/editar/:id"
+              element={
+                <ProtectedRoute>
+                  <Motoristas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/fazendas"
               element={
                 <ProtectedRoute>

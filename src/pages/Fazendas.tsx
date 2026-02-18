@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -51,6 +52,7 @@ import fazendasService from "@/services/fazendas";
 import { usePeriodoFilter } from "@/hooks/usePeriodoFilter";
 import { formatarInputMoeda, desformatarMoeda } from "@/utils/formatters";
 import type { Fazenda, CriarFazendaPayload } from "@/types";
+import { ITEMS_PER_PAGE } from "@/lib/pagination";
 
 export default function Fazendas() {
   const queryClient = useQueryClient();
@@ -204,7 +206,23 @@ export default function Fazendas() {
     }
 
     if (isEditing && newProducao.id) {
-      updateMutation.mutate({ id: newProducao.id, data: newProducao });
+      const payloadForUpdate: Partial<CriarFazendaPayload> = {
+        fazenda: newProducao.fazenda,
+        localizacao: newProducao.localizacao,
+        proprietario: newProducao.proprietario,
+        mercadoria: newProducao.mercadoria,
+        variedade: newProducao.variedade,
+        preco_por_tonelada: newProducao.preco_por_tonelada,
+        peso_medio_saca: newProducao.peso_medio_saca,
+        safra: newProducao.safra,
+        total_sacas_carregadas: newProducao.total_sacas_carregadas,
+        total_toneladas: newProducao.total_toneladas,
+        faturamento_total: newProducao.faturamento_total,
+        ultimo_frete: newProducao.ultimo_frete,
+        colheita_finalizada: newProducao.colheita_finalizada,
+      };
+
+      updateMutation.mutate({ id: newProducao.id, data: payloadForUpdate });
     } else {
       const payload: CriarFazendaPayload = {
         fazenda: newProducao.fazenda!,
@@ -221,12 +239,13 @@ export default function Fazendas() {
         ultimo_frete: "-",
         colheita_finalizada: false,
       };
+
       createMutation.mutate(payload);
     }
   };
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = ITEMS_PER_PAGE;
 
   const filteredData = fazendas.filter(
     (p) =>
@@ -274,6 +293,17 @@ export default function Fazendas() {
     // Expor fazendas para uso em outras páginas
     (window as any).getProducaoFazendas = () => fazendas;
   }, [fazendas, updateMutation]);
+
+  // Abrir modal de edição quando rota /fazendas/editar/:id for acessada
+  const fazendaParams = useParams();
+  useEffect(() => {
+    const idParam = fazendaParams.id;
+    if (!idParam) return;
+    if (fazendas.length > 0) {
+      const found = fazendas.find((f) => String(f.id) === String(idParam));
+      if (found) handleOpenEditModal(found);
+    }
+  }, [fazendaParams.id, fazendas]);
 
   const handleToggleColheitaFinalizada = (fazendaId: string) => {
     const fazenda = fazendas.find((p) => p.id === fazendaId);
@@ -1169,6 +1199,7 @@ export default function Fazendas() {
                     onChange={(e) => setNewProducao({ ...newProducao, proprietario: e.target.value })}
                   />
                 </div>
+                
               </div>
             </div>
 

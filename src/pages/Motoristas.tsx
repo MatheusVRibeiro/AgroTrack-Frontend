@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -49,6 +50,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { cleanPayload, emptyToNull } from "@/lib/utils";
 import type { Motorista } from "@/types";
+import { ITEMS_PER_PAGE } from "@/lib/pagination";
 
 // Payload para criar motorista
 interface CriarMotoristaPayload {
@@ -85,6 +87,7 @@ const tipoMotoristaConfig = {
 
 export default function Motoristas() {
   const queryClient = useQueryClient();
+  const [documentoTipo, setDocumentoTipo] = useState<'cpf' | 'cnpj' | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tipoFilter, setTipoFilter] = useState<string>("all");
@@ -95,7 +98,7 @@ export default function Motoristas() {
   const [motoristasState, setMotoristasState] = useState<Motorista[]>([]);
   const [isLoadingMotoristas, setIsLoadingMotoristas] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = ITEMS_PER_PAGE;
   const [errosCampos, setErrosCampos] = useState<Record<string, string>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -103,6 +106,25 @@ export default function Motoristas() {
   useEffect(() => {
     carregarMotoristas();
   }, []);
+
+  // Abrir modal de edição quando rota /motoristas/editar/:id for acessada
+  const params = useParams();
+  useEffect(() => {
+    const idParam = params.id;
+    if (!idParam) return;
+    // Se já carregou os motoristas, tenta abrir o modal
+    if (!isLoadingMotoristas && motoristasState.length > 0) {
+      const found = motoristasState.find((m) => String(m.id) === String(idParam));
+      if (found) {
+        handleOpenEditModal(found);
+      } else {
+        // Caso não encontre, tenta recarregar (pode ser um id novo)
+        carregarMotoristas();
+      }
+    }
+  }, [params.id, isLoadingMotoristas, motoristasState]);
+
+  const navigate = useNavigate();
 
 
 
@@ -225,7 +247,11 @@ export default function Motoristas() {
     };
     // Adiciona documento (CPF/CNPJ) se preenchido
     if (editedMotorista.documento && editedMotorista.documento.trim() !== "") {
-      payload.documento = apenasNumeros(editedMotorista.documento);
+      const docLimpo = apenasNumeros(editedMotorista.documento);
+      payload.documento = docLimpo;
+      // Detecta tipo: se tiver mais de 11 dígitos -> CNPJ, caso contrário CPF
+      const tipoDetectado = documentoTipo || (docLimpo.length > 11 ? 'cnpj' : 'cpf');
+      payload.documento_tipo = tipoDetectado;
     }
 
 
@@ -723,7 +749,7 @@ export default function Motoristas() {
                 onClick={() => {
                   if (selectedMotorista) {
                     // Exemplo: navegação para rota de edição usando id numérico
-                    window.location.href = `/motoristas/editar/${selectedMotorista.id}`;
+                    navigate(`/motoristas/editar/${selectedMotorista.id}`);
                     setSelectedMotorista(null);
                   }
                 }}
@@ -967,6 +993,7 @@ export default function Motoristas() {
                   setEditedMotorista({ ...editedMotorista, documento: e.target.value });
                   setErrosCampos({ ...errosCampos, documento: "" });
                 }}
+                onDetectTipoDocumento={(tipo) => setDocumentoTipo(tipo)}
                 erro={errosCampos.documento}
               />
             </div>

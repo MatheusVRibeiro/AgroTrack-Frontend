@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -448,6 +449,30 @@ export default function Fretes() {
       setIsNewFreteOpen(true);
     }
   };
+
+  // Abrir modal de edição quando rota /fretes/editar/:id for acessada
+  const fretesParams = useParams();
+  useEffect(() => {
+    const idParam = fretesParams.id;
+    if (!idParam) return;
+    if (fretesState.length > 0) {
+      const found = fretesState.find((f) => String(f.id) === String(idParam));
+      if (found) {
+        setNewFrete({
+          origem: "",
+          destino: found.destino,
+          motoristaId: found.motoristaId,
+          caminhaoId: found.caminhaoId,
+          fazendaId: found.fazendaId || "",
+          toneladas: String(found.toneladas),
+          valorPorTonelada: String(found.valorPorTonelada),
+          ticket: found.ticket || "",
+        });
+        setIsEditingFrete(true);
+        setIsNewFreteOpen(true);
+      }
+    }
+  }, [fretesParams.id, fretesState]);
 
   const handleSaveFrete = async () => {
     // Debug: mostrar estado atual ao tentar salvar

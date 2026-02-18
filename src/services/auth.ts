@@ -27,16 +27,18 @@ interface LoginResult {
 
 export async function login(email: string, senha: string): Promise<ApiResponse<LoginResult>> {
   try {
-    const res = await api.post<BackendLoginResponse>("/auth/login", { email, senha });
-    
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
+    const res = await api.post<BackendLoginResponse>("/auth/login", { email: normalizedEmail, senha });
+
+    const status = res.status;
     // Backend retorna: { success, message, token, usuario }
     if (res.data.success && res.data.token && res.data.usuario) {
       const { token, usuario } = res.data;
-      
+
       if (!usuario) {
-        return { success: false, data: null, message: "Usuário não encontrado na resposta" };
+        return { success: false, data: null, message: "Usuário não encontrado na resposta", status };
       }
-      
+
       // Map backend fields (nome) to frontend format (name)
       const mappedUser: User = {
         id: usuario.id,
@@ -44,37 +46,46 @@ export async function login(email: string, senha: string): Promise<ApiResponse<L
         email: usuario.email,
         role: usuario.role ?? "admin",
       };
-      
+
       return {
         success: true,
         data: {
           user: mappedUser,
           token: token,
         },
+        status,
       };
     }
-    
-    return { success: false, data: null, message: "Resposta inválida do servidor" };
+
+    return { success: false, data: null, message: res.data.message ?? "Resposta inválida do servidor", status };
   } catch (err: unknown) {
-    const message = err?.response?.data?.message ?? err.message ?? "Erro na autenticação";
-    return { success: false, data: null, message };
+    // Try to extract status/message from axios error shape
+    const anyErr: any = err;
+    const status = anyErr?.response?.status;
+    const message = anyErr?.response?.data?.message ?? anyErr?.message ?? "Erro na autenticação";
+    return { success: false, data: null, message, status };
   }
 }
 
 export async function register(nome: string, email: string, senha: string): Promise<ApiResponse<{ user: User }>> {
   try {
-    const res = await api.post("/auth/registrar", { nome, email, senha });
-    
+    const normalizedEmail = String(email ?? "").trim().toLowerCase();
+    const res = await api.post("/auth/registrar", { nome, email: normalizedEmail, senha });
+
+    const status = res.status;
     if (res.data.success && res.data.data) {
       return {
         success: true,
         data: { user: res.data.data },
+        status,
       };
     }
-    
-    return { success: false, data: null, message: "Resposta inválida do servidor" };
+
+    return { success: false, data: null, message: res.data.message ?? "Resposta inválida do servidor", status };
   } catch (err: unknown) {
-    const message = err?.response?.data?.message ?? err.message ?? "Erro no registro";
-    return { success: false, data: null, message };
+    const anyErr: any = err;
+    const status = anyErr?.response?.status;
+    const message = anyErr?.response?.data?.message ?? anyErr?.message ?? "Erro no registro";
+    return { success: false, data: null, message, status };
   }
 }
