@@ -53,20 +53,20 @@ export function DataTable<T>({
   return (
     <>
       {/* Mobile View: Cards */}
-      <div className="md:hidden space-y-3 animate-fade-in">
+      <div className="space-y-3 md:hidden animate-fade-in">
         {data.map((item, index) => {
           const isNegative = highlightNegative?.(item);
           return (
             <Card
               key={index}
               className={cn(
-                "cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.98]",
+                "cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.98] min-h-11",
                 isNegative && "bg-loss/5 border-loss/20 hover:bg-loss/10",
                 !isNegative && "hover:border-primary/30"
               )}
               onClick={() => onRowClick?.(item)}
             >
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-4 sm:p-5 space-y-3">
                 {/* Título do Card (campo principal ou customizado) */}
                 {mobileCardTitle ? (
                   <div className="font-semibold text-base border-b pb-2 mb-2">
@@ -82,7 +82,7 @@ export function DataTable<T>({
                 )}
 
                 {/* Campos Principais */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {mobileColumns.slice(1).map((column) => (
                     <div key={column.key} className="space-y-1">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -103,8 +103,9 @@ export function DataTable<T>({
       </div>
 
       {/* Desktop View: Table */}
-      <div className="hidden md:block bg-card rounded-xl border overflow-hidden animate-fade-in shadow-sm">
-        <Table>
+      <div className="hidden md:block bg-card rounded-xl border animate-fade-in shadow-sm">
+        <div className="w-full overflow-x-auto">
+          <Table>
           <TableHeader>
             <TableRow className="bg-gradient-to-r from-muted/50 to-muted/30 hover:bg-muted/50 border-b-2">
               {columns.map((column) => (
@@ -141,7 +142,8 @@ export function DataTable<T>({
               );
             })}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
     </>
   );

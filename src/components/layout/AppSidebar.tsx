@@ -23,6 +23,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -37,18 +38,19 @@ const navigation = [
 ];
 
 export function AppSidebar() {
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <>
       {/* Mobile Trigger Button - Floating Action Button */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+      <Sheet open={isMobile ? mobileOpen : false} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
           <Button
             variant="outline"
             size="icon"
-            className="lg:hidden fixed top-4 left-4 z-40 shadow-lg bg-card hover:bg-accent"
+            className="lg:hidden fixed top-3 left-3 z-40 h-11 w-11 shadow-lg bg-card hover:bg-accent"
             aria-label="Abrir menu"
           >
             <Menu className="h-5 w-5" />
@@ -131,7 +133,7 @@ function SidebarContent({ collapsed, onNavigate }: SidebarContentProps) {
               to={item.href}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "flex min-h-11 items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-primary"
                   : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"

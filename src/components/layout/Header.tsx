@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/auth/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const isMobile = useIsMobile();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -30,7 +32,7 @@ export function Header({ title, subtitle }: HeaderProps) {
     <header className="h-14 sm:h-16 border-b border-border bg-card flex items-center justify-between px-4 sm:px-6 ml-12 lg:ml-0">
       <div className="min-w-0 flex-1">
         <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate">{title}</h1>
-        {subtitle && (
+        {subtitle && !isMobile && (
           <p className="text-xs sm:text-sm text-muted-foreground truncate">{subtitle}</p>
         )}
       </div>
@@ -46,7 +48,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         </div>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative h-11 w-11">
           <Bell className="h-5 w-5 text-muted-foreground" />
           <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-loss" />
         </Button>
@@ -54,7 +56,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
+            <Button variant="ghost" size="icon" className="rounded-full h-11 w-11">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
                 <User className="h-4 w-4 text-primary-foreground" />
               </div>

@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ProfitData {
   month: string;
@@ -29,26 +30,29 @@ export function ProfitChart({ data: propData }: ProfitChartProps) {
   ];
 
   const data = propData || defaultData;
+  const isMobile = useIsMobile();
   return (
-    <div className="bg-card rounded-xl border p-6 animate-fade-in">
+    <div className="bg-card rounded-xl border p-4 sm:p-6 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="font-semibold text-foreground">Lucro Mensal</h3>
           <p className="text-sm text-muted-foreground">Evolução do resultado</p>
         </div>
       </div>
-      <div className="h-80">
+      <div className="h-64 sm:h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
               dataKey="month" 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
+              fontSize={isMobile ? 10 : 12}
+              interval={isMobile ? 1 : 0}
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
+              fontSize={isMobile ? 10 : 12}
+              interval={isMobile ? 1 : 0}
               tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip

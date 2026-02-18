@@ -1324,7 +1324,7 @@ export default function Fretes() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
         <Card className="p-3 md:p-4 bg-muted/40">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs md:text-base font-semibold text-muted-foreground">Fretes no período</p>
@@ -1668,7 +1668,7 @@ export default function Fretes() {
               <Button
                 variant="outline"
                 className={cn(
-                  "w-[220px] justify-start text-left font-normal",
+                  "w-full sm:w-[220px] justify-start text-left font-normal",
                   !dateRange?.from && !dateRange?.to && "text-muted-foreground"
                 )}
               >

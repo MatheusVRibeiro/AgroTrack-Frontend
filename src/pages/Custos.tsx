@@ -557,7 +557,7 @@ export default function Custos() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard
           label="Total de Custos"
           value={`R$ ${totalCustos.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
@@ -1240,7 +1240,7 @@ export default function Custos() {
               <Separator />
 
               {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Frete */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1307,7 +1307,7 @@ export default function Custos() {
                     Informações do Abastecimento
                   </p>
                   <Card className="p-4 bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {selectedCusto.litros && (
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Litros Abastecidos</p>
@@ -1436,7 +1436,7 @@ export default function Custos() {
                     <h4 className="font-semibold text-amber-900 dark:text-amber-100">Informações do Abastecimento</h4>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="litros">Litros Abastecidos *</Label>
                       <Input 

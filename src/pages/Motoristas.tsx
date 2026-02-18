@@ -454,7 +454,7 @@ export default function Motoristas() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
         <Card className="p-3 md:p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -629,6 +629,7 @@ export default function Motoristas() {
               <Button
                 variant="outline"
                 size="sm"
+                className="min-h-11 px-4"
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
               >
@@ -640,6 +641,7 @@ export default function Motoristas() {
               <Button
                 variant="outline"
                 size="sm"
+                className="min-h-11 px-4"
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
               >

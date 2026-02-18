@@ -754,7 +754,7 @@ export default function Fazendas() {
                   <Separator />
 
                   {/* Estatísticas de Produção */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Package className="h-3 w-3" />
@@ -889,7 +889,7 @@ export default function Fazendas() {
 
                           <Separator />
 
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Package className="h-3 w-3" />
@@ -1328,7 +1328,7 @@ export default function Fazendas() {
                     <Package className="h-4 w-4" />
                     Produção Acumulada
                   </h4>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                     <div>
                       <p className="text-blue-600 dark:text-blue-400">Sacas Carregadas</p>
                       <p className="font-bold text-lg">{newProducao.total_sacas_carregadas?.toLocaleString("pt-BR") || 0}</p>

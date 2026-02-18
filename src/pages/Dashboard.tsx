@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import * as fretesService from "@/services/fretes";
 import fazendasService from "@/services/fazendas";
 import * as motoristasService from "@/services/motoristas";
@@ -134,6 +135,7 @@ const smartAlerts: SmartAlert[] = [
 ];
 
 export default function Dashboard() {
+  const isMobile = useIsMobile();
   const [alerts, setAlerts] = useState(smartAlerts);
   const [modalAberto, setModalAberto] = useState<"sacas" | "ocupacao" | "custos" | "resultado" | null>(null);
 
@@ -652,7 +654,7 @@ export default function Dashboard() {
 
       {/* Modal: Sacas Transportadas */}
       <Dialog open={modalAberto === "sacas"} onOpenChange={() => setModalAberto(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl">
           <DialogHeader>
             <DialogTitle>Sacas Transportadas - Análise Detalhada</DialogTitle>
             <DialogDescription>
@@ -685,7 +687,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosSacasMensais}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="mes" />
+                  <XAxis dataKey="mes" interval={isMobile ? 1 : 0} tick={{ fontSize: isMobile ? 10 : 12 }} />
                   <YAxis />
                   <RechartsTooltip
                     contentStyle={{
@@ -717,7 +719,7 @@ export default function Dashboard() {
 
       {/* Modal: Custo por Saca */}
       <Dialog open={modalAberto === "custos"} onOpenChange={() => setModalAberto(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl">
           <DialogHeader>
             <DialogTitle>Custo por Saca - Análise Detalhada</DialogTitle>
             <DialogDescription>
@@ -755,7 +757,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dadosCustoMensal}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="mes" />
+                  <XAxis dataKey="mes" interval={isMobile ? 1 : 0} tick={{ fontSize: isMobile ? 10 : 12 }} />
                   <YAxis domain={[0, 4]} />
                   <RechartsTooltip
                     contentStyle={{
@@ -810,7 +812,7 @@ export default function Dashboard() {
 
       {/* Modal: Taxa de Ocupação */}
       <Dialog open={modalAberto === "ocupacao"} onOpenChange={() => setModalAberto(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl">
           <DialogHeader>
             <DialogTitle>Taxa de Ocupação da Frota - Últimas 4 Semanas</DialogTitle>
             <DialogDescription>
@@ -845,7 +847,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dadosOcupacaoSemanal}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="semana" />
+                  <XAxis dataKey="semana" interval={0} tick={{ fontSize: isMobile ? 10 : 12 }} />
                   <YAxis domain={[0, 100]} />
                   <RechartsTooltip
                     contentStyle={{
@@ -894,7 +896,7 @@ export default function Dashboard() {
 
       {/* Modal: Resultado do Mês */}
       <Dialog open={modalAberto === "resultado"} onOpenChange={() => setModalAberto(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl">
           <DialogHeader>
             <DialogTitle>Resultado Mensal - Análise Financeira</DialogTitle>
             <DialogDescription>
@@ -929,7 +931,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosResultadoMensal}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="mes" />
+                  <XAxis dataKey="mes" interval={isMobile ? 1 : 0} tick={{ fontSize: isMobile ? 10 : 12 }} />
                   <YAxis />
                   <RechartsTooltip
                     contentStyle={{

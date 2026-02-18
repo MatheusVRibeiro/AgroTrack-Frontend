@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface RevenueData {
   month: string;
@@ -30,15 +31,16 @@ export function RevenueChart({ data: propData }: RevenueChartProps) {
   ];
 
   const data = propData || defaultData;
+  const isMobile = useIsMobile();
   return (
-    <div className="bg-card rounded-xl border p-6 animate-fade-in">
+    <div className="bg-card rounded-xl border p-4 sm:p-6 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="font-semibold text-foreground">Receita vs Custos</h3>
           <p className="text-sm text-muted-foreground">Últimos 6 meses</p>
         </div>
       </div>
-      <div className="h-80">
+      <div className="h-64 sm:h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
             <defs>
@@ -55,11 +57,13 @@ export function RevenueChart({ data: propData }: RevenueChartProps) {
             <XAxis 
               dataKey="month" 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
+              fontSize={isMobile ? 10 : 12}
+              interval={isMobile ? 1 : 0}
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
+              fontSize={isMobile ? 10 : 12}
+              interval={isMobile ? 1 : 0}
               tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip
