@@ -42,8 +42,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, Package, Weight, DollarSign, Edit, MapPin, Save, X, Info, TrendingUp, TrendingDown, Calendar, User, Sparkles, BarChart3, FileDown, CheckCircle2, Truck, AlertCircle, Filter } from "lucide-react";
+import { Plus, Package, Weight, DollarSign, Edit, MapPin, Info, TrendingUp, TrendingDown, Calendar, User, Sparkles, BarChart3, FileDown, CheckCircle2, Truck, AlertCircle, Filter } from "lucide-react";
 import { toast } from "sonner";
+import { sortFazendasPorNome } from "@/lib/sortHelpers";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -53,6 +54,7 @@ import type { Fazenda, CriarFazendaPayload } from "@/types";
 import { ITEMS_PER_PAGE } from "@/lib/pagination";
 import { useAtualizarFazenda, useCriarFazenda, useDeletarFazenda, useFazendas } from "@/hooks/queries/useFazendas";
 import { diffObjects } from "@/lib/diff";
+import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
 
 export default function Fazendas() {
   // Gerar opções de safra dinamicamente (últimos 5 anos e próximos 3)
@@ -109,9 +111,10 @@ export default function Fazendas() {
   const [selectedProducao, setSelectedProducao] = useState<Fazenda | null>(null);
   const [originalProducao, setOriginalProducao] = useState<Fazenda | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newProducao, setNewProducao] = useState<Partial<Fazenda>>({
     fazenda: "",
-    localizacao: "",
+    estado: "SP",
     proprietario: "",
     mercadoria: "",
     variedade: "",
@@ -127,7 +130,7 @@ export default function Fazendas() {
   const handleOpenNewModal = () => {
     setNewProducao({
       fazenda: "",
-      localizacao: "",
+      estado: "SP",
       proprietario: "",
       mercadoria: "",
       variedade: "",
@@ -169,21 +172,37 @@ export default function Fazendas() {
   }, [isModalOpen, navigate]);
 
   const handleSave = async () => {
-    if (!newProducao.fazenda || !newProducao.mercadoria || !newProducao.variedade) {
-      toast.error("Preencha todos os campos obrigatórios!");
+    if (isSaving) return;
+
+    const fazenda = (newProducao.fazenda || "").trim();
+    const estado = newProducao.estado;
+    const proprietario = (newProducao.proprietario || "").trim();
+    const mercadoria = (newProducao.mercadoria || "").trim();
+    const variedade = (newProducao.variedade || "").trim();
+    const safra = (newProducao.safra || "").trim();
+    const precoPorTonelada = toNumber(newProducao.preco_por_tonelada);
+    const pesoMedioSaca = toNumber(newProducao.peso_medio_saca);
+
+    if (!fazenda || !estado || !proprietario || !mercadoria || !safra) {
+      toast.error("Preencha todos os campos obrigatórios: fazenda, estado, proprietário, mercadoria e safra.");
+      return;
+    }
+
+    if (precoPorTonelada <= 0) {
+      toast.error("Informe um preço por tonelada maior que zero.");
       return;
     }
 
     if (isEditing && newProducao.id) {
       const payloadForUpdate: Partial<CriarFazendaPayload> = {
-        fazenda: newProducao.fazenda,
-        localizacao: newProducao.localizacao,
-        proprietario: newProducao.proprietario,
-        mercadoria: newProducao.mercadoria,
-        variedade: newProducao.variedade,
-        preco_por_tonelada: newProducao.preco_por_tonelada,
-        peso_medio_saca: newProducao.peso_medio_saca,
-        safra: newProducao.safra,
+        fazenda,
+        estado,
+        proprietario,
+        mercadoria,
+        variedade: variedade || undefined,
+        preco_por_tonelada: precoPorTonelada,
+        peso_medio_saca: pesoMedioSaca > 0 ? pesoMedioSaca : undefined,
+        safra,
         total_sacas_carregadas: newProducao.total_sacas_carregadas,
         total_toneladas: newProducao.total_toneladas,
         faturamento_total: newProducao.faturamento_total,
@@ -200,40 +219,35 @@ export default function Fazendas() {
         return;
       }
 
-      setIsModalOpen(false);
+      setIsSaving(true);
       try {
-        const res = await updateMutation.mutateAsync({ id: newProducao.id, data: delta as any });
+        const res = await updateMutation.mutateAsync({ id: String(newProducao.id), data: delta as any });
         if (res?.success) {
           toast.success("Fazenda atualizada com sucesso");
           setIsModalOpen(false);
           navigate("/fazendas", { replace: true });
         } else {
           toast.error(res?.message || "Erro ao atualizar fazenda");
-          setIsModalOpen(true);
         }
       } catch (e) {
         console.error(e);
         toast.error("Erro ao atualizar fazenda");
-        setIsModalOpen(true);
+      } finally {
+        setIsSaving(false);
       }
     } else {
       const payload: CriarFazendaPayload = {
-        fazenda: newProducao.fazenda!,
-        localizacao: newProducao.localizacao || "",
-        proprietario: newProducao.proprietario || "",
-        mercadoria: newProducao.mercadoria!,
-        variedade: newProducao.variedade || "",
-        preco_por_tonelada: newProducao.preco_por_tonelada || 0,
-        peso_medio_saca: newProducao.peso_medio_saca || 25,
-        safra: newProducao.safra || "2024/2025",
-        total_sacas_carregadas: 0,
-        total_toneladas: 0,
-        faturamento_total: 0,
-        ultimo_frete: "-",
-        colheita_finalizada: false,
+        fazenda,
+        estado,
+        proprietario,
+        mercadoria,
+        variedade: variedade || undefined,
+        preco_por_tonelada: precoPorTonelada,
+        peso_medio_saca: pesoMedioSaca > 0 ? pesoMedioSaca : undefined,
+        safra,
       };
 
-      setIsModalOpen(false);
+      setIsSaving(true);
       try {
         const res = await createMutation.mutateAsync(payload as any);
         if (res?.success) {
@@ -242,12 +256,12 @@ export default function Fazendas() {
           navigate("/fazendas", { replace: true });
         } else {
           toast.error(res?.message || "Erro ao criar fazenda");
-          setIsModalOpen(true);
         }
       } catch (e) {
         console.error(e);
         toast.error("Erro ao criar fazenda");
-        setIsModalOpen(true);
+      } finally {
+        setIsSaving(false);
       }
     }
   };
@@ -255,12 +269,14 @@ export default function Fazendas() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
 
-  const filteredData = fazendas.filter(
-    (p) =>
-      p.fazenda.toLowerCase().includes(search.toLowerCase()) ||
-      p.mercadoria.toLowerCase().includes(search.toLowerCase()) ||
-      (p.variedade?.toLowerCase() || "").includes(search.toLowerCase()) ||
-      (p.proprietario?.toLowerCase() || "").includes(search.toLowerCase())
+  const filteredData = sortFazendasPorNome(
+    fazendas.filter(
+      (p) =>
+        p.fazenda.toLowerCase().includes(search.toLowerCase()) ||
+        p.mercadoria.toLowerCase().includes(search.toLowerCase()) ||
+        (p.variedade?.toLowerCase() || "").includes(search.toLowerCase()) ||
+        (p.proprietario?.toLowerCase() || "").includes(search.toLowerCase())
+    )
   );
 
   // Lógica de paginação
@@ -313,19 +329,30 @@ export default function Fazendas() {
     }
   }, [fazendaParams.id, fazendas]);
 
-  const handleToggleColheitaFinalizada = (fazendaId: string) => {
+  const handleToggleColheitaFinalizada = async (fazendaId: string) => {
     const fazenda = fazendas.find((p) => p.id === fazendaId);
     if (fazenda) {
       const statusAtual = !!fazenda.colheita_finalizada;
-      updateMutation.mutate({
-        id: fazendaId,
-        data: { colheita_finalizada: !statusAtual },
-      });
-      toast.success(
-        statusAtual
-          ? "Colheita reaberta para atualização."
-          : "Colheita finalizada com sucesso!"
-      );
+      try {
+        const res = await updateMutation.mutateAsync({
+          id: fazendaId,
+          data: { colheita_finalizada: !statusAtual },
+        });
+
+        if (res?.success) {
+          setSelectedProducao(null);
+          toast.success(
+            statusAtual
+              ? "Colheita reaberta para atualização."
+              : "Colheita finalizada com sucesso!"
+          );
+        } else {
+          toast.error(res?.message || "Erro ao atualizar status da colheita");
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Erro ao atualizar status da colheita");
+      }
     }
   };
 
@@ -362,9 +389,9 @@ export default function Fazendas() {
     doc.setFontSize(9);
     doc.setTextColor(71, 85, 105);
     doc.setFont("helvetica", "bold");
-    doc.text("Localização:", 18, 58);
+    doc.text("Estado:", 18, 58);
     doc.setFont("helvetica", "normal");
-    doc.text(fazenda.localizacao, 42, 58);
+    doc.text(fazenda.estado || "-", 42, 58);
 
     doc.setFont("helvetica", "bold");
     doc.text("Proprietário:", 120, 58);
@@ -719,7 +746,7 @@ export default function Fazendas() {
                         </CardTitle>
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                           <MapPin className="h-3.5 w-3.5" />
-                          {fazenda.localizacao}
+                          {fazenda.estado || "-"}
                         </div>
                       </div>
                     </div>
@@ -856,7 +883,7 @@ export default function Fazendas() {
                                 </CardTitle>
                                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                   <MapPin className="h-3.5 w-3.5" />
-                                  {fazenda.localizacao}
+                                  {fazenda.estado || "-"}
                                 </div>
                               </div>
                             </div>
@@ -1160,7 +1187,7 @@ export default function Fazendas() {
       )}
 
       {/* Modal de Nova/Editar Fazenda */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={(open) => !isSaving && setIsModalOpen(open)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
@@ -1189,17 +1216,24 @@ export default function Fazendas() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="localizacao">Localização</Label>
-                  <Input
-                    id="localizacao"
-                    placeholder="Ex: Marília, SP"
-                    value={newProducao.localizacao}
-                    onChange={(e) => setNewProducao({ ...newProducao, localizacao: e.target.value })}
-                  />
+                  <Label htmlFor="estado">Estado *</Label>
+                  <Select
+                    value={newProducao.estado || "SP"}
+                    onValueChange={(value: "SP" | "MS" | "MT") => setNewProducao({ ...newProducao, estado: value })}
+                  >
+                    <SelectTrigger id="estado">
+                      <SelectValue placeholder="Selecione o estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SP">SP</SelectItem>
+                      <SelectItem value="MS">MS</SelectItem>
+                      <SelectItem value="MT">MT</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="proprietario">Proprietário</Label>
+                  <Label htmlFor="proprietario">Proprietário *</Label>
                   <Input
                     id="proprietario"
                     placeholder="Ex: João Silva"
@@ -1236,7 +1270,7 @@ export default function Fazendas() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="variedade">Variedade/Cor *</Label>
+                  <Label htmlFor="variedade">Variedade/Cor</Label>
                   <Select
                     value={newProducao.variedade}
                     onValueChange={(value) => setNewProducao({ ...newProducao, variedade: value })}
@@ -1375,14 +1409,12 @@ export default function Fazendas() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
-              <X className="h-4 w-4 mr-2" />
-              Cancelar
-            </Button>
-            <Button onClick={handleSave}>
-              <Save className="h-4 w-4 mr-2" />
-              {isEditing ? "Salvar Alterações" : "Cadastrar Fazenda"}
-            </Button>
+            <ModalSubmitFooter
+              onCancel={() => setIsModalOpen(false)}
+              onSubmit={handleSave}
+              isSubmitting={isSaving}
+              submitLabel={isEditing ? "Salvar Alterações" : "Cadastrar Fazenda"}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1406,7 +1438,7 @@ export default function Fazendas() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <MapPin className="h-4 w-4" />
-                      {selectedProducao?.localizacao}
+                      {selectedProducao?.estado || "-"}
                     </div>
                     <div className="flex items-center gap-1">
                       <User className="h-4 w-4" />
