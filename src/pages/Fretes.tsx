@@ -7,6 +7,8 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
 import { SkeletonTable } from "@/components/shared/Skeleton";
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,12 +59,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, MapPin, ArrowRight, Truck, Package, DollarSign, TrendingUp, Edit, Save, X, Weight, Info, Calendar as CalendarIcon, Fuel, Wrench, AlertCircle, FileDown, FileText, Lock, Unlock, Filter } from "lucide-react";
+import { Plus, MapPin, ArrowRight, Truck, Package, DollarSign, TrendingUp, Edit, Save, X, Weight, Info, Calendar as CalendarIcon, Fuel, Wrench, AlertCircle, FileDown, FileText, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { sortMotoristasPorNome, sortFazendasPorNome } from "@/lib/sortHelpers";
 import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { useRefreshData } from "@/hooks/useRefreshData";
+import { useShake } from "@/hooks/useShake";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import jsPDF from "jspdf";
@@ -91,6 +94,7 @@ interface Frete {
   custos: number;
   resultado: number;
   ticket?: string;
+  numeroNotaFiscal?: string;
 }
 
 interface EstoqueFazenda {
@@ -243,14 +247,39 @@ const custosData: Custo[] = [
 export default function Fretes() {
   const queryClient = useQueryClient();
   
-  // Helper para converter valores para número
+  // Helper para converter valores formatados para número
+  // Entende formato brasileiro: "48.800,00" → 48800.00
   const toNumber = (value: number | string | null | undefined): number => {
     if (typeof value === "number") return value;
-    if (value === null || value === undefined || value === "") return 0;
-    const parsed = Number(value);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    if (typeof value === "string") {
+      // Se tem vírgula, é formato BR (pontos são milhar, vírgula é decimal)
+      if (value.includes(',')) {
+        const num = Number(value.replace(/\./g, '').replace(',', '.'));
+        return isNaN(num) ? 0 : num;
+      }
+      // Se tem ponto após o último ponto apenas 2 dígitos, é decimal (200.00 formato US para valores monetários)
+      const lastDotIndex = value.lastIndexOf('.');
+      if (lastDotIndex !== -1) {
+        const afterLastDot = value.substring(lastDotIndex + 1);
+        const beforeLastDot = value.substring(0, lastDotIndex).replace(/\./g, '');
+        if (afterLastDot.length === 2) {
+          // Formato monetário: 200.00 (ponto é decimal)
+          return Number(`${beforeLastDot}.${afterLastDot}`);
+        }
+        if (afterLastDot.length === 3) {
+          // Formato peso: 20.555 => 20t 555kg
+          return Number(`${beforeLastDot}.${afterLastDot}`);
+        }
+        // Caso contrário, ponto é milhar: 20.400 (remove ponto para obter 20400)
+        return Number(value.replace(/\./g, ''));
+      }
+      // Sem separadores
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    }
+    return 0;
   };
-  
+
   const [search, setSearch] = useState("");
   const [motoristaFilter, setMotoristaFilter] = useState("all");
   const [caminhaoFilter, setCaminhaoFilter] = useState("all");
@@ -262,16 +291,57 @@ export default function Fretes() {
   const [isNewFreteOpen, setIsNewFreteOpen] = useState(false);
   const [isEditingFrete, setIsEditingFrete] = useState(false);
   const [isSavingFrete, setIsSavingFrete] = useState(false);
+  const getTodayInputDate = () => format(new Date(), "yyyy-MM-dd");
+  const normalizeInputDate = (value?: string) => {
+    if (!value) return getTodayInputDate();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (value.includes("/")) {
+      const [dia, mes, ano] = value.split("/");
+      const parsed = new Date(Number(ano), Number(mes) - 1, Number(dia));
+      return Number.isNaN(parsed.getTime()) ? getTodayInputDate() : format(parsed, "yyyy-MM-dd");
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? getTodayInputDate() : format(parsed, "yyyy-MM-dd");
+  };
+
   const [newFrete, setNewFrete] = useState({
     origem: "",
     destino: "",
     motoristaId: "",
     caminhaoId: "",
     fazendaId: "",
+    dataFrete: getTodayInputDate(),
     toneladas: "",
     valorPorTonelada: "",
     ticket: "",
+    numeroNotaFiscal: "",
   });
+  type FormErrors = {
+    fazendaId: string;
+    destino: string;
+    motoristaId: string;
+    caminhaoId: string;
+    dataFrete: string;
+    toneladas: string;
+    valorPorTonelada: string;
+  };
+  const initialFormErrors: FormErrors = {
+    fazendaId: "",
+    destino: "",
+    motoristaId: "",
+    caminhaoId: "",
+    dataFrete: "",
+    toneladas: "",
+    valorPorTonelada: "",
+  };
+  const [formErrors, setFormErrors] = useState<FormErrors>(initialFormErrors);
+  const resetFormErrors = () => {
+    setFormErrors(initialFormErrors);
+  };
+  const clearFormError = (field: keyof FormErrors) => {
+    setFormErrors((prev) => (prev[field] ? { ...prev, [field]: "" } : prev));
+  };
+  const { isShaking, triggerShake } = useShake(220);
   const [estoquesFazendas, setEstoquesFazendas] = useState<EstoqueFazenda[]>([]);
   const [estoqueSelecionado, setEstoqueSelecionado] = useState<EstoqueFazenda | null>(null);
   const [caminhoesDoMotorista, setCaminhoesDoMotorista] = useState<any[]>([]);
@@ -282,7 +352,6 @@ export default function Fretes() {
   // Estados para Exercício (Ano/Mês) e Fechamento
   const [tipoVisualizacao, setTipoVisualizacao] = useState<"mensal" | "trimestral" | "semestral" | "anual">("mensal");
   const [selectedPeriodo, setSelectedPeriodo] = useState(format(new Date(), "yyyy-MM")); // Mês atual
-  const [mesesFechados, setMesesFechados] = useState<string[]>([]); // Meses que já foram fechados
   const [filtersOpen, setFiltersOpen] = useState(false); // Controle do Sheet de filtros mobile
   
   // Dados históricos para comparação (simulado - mes anterior)
@@ -412,13 +481,115 @@ export default function Fretes() {
       motoristaId: "",
       caminhaoId: "",
       fazendaId: "",
+      dataFrete: getTodayInputDate(),
       toneladas: "",
       valorPorTonelada: "",
       ticket: "",
+      numeroNotaFiscal: "",
     });
     setEstoqueSelecionado(null);
     setIsEditingFrete(false);
     setIsNewFreteOpen(true);
+  };
+
+  const loadEstoquesForEdit = async (frete: Frete) => {
+    const res = await fazendasService.listarFazendas();
+    let resolvedFazendaId = frete.fazendaId ? String(frete.fazendaId) : "";
+
+    if (res.success && res.data) {
+      const fazendasFormatadas: EstoqueFazenda[] = res.data
+        .filter((f) => !f.colheita_finalizada)
+        .map((f) => ({
+          id: f.id,
+          fazendaId: f.id,
+          fazenda: f.fazenda,
+          estado: f.estado || "",
+          mercadoria: f.mercadoria,
+          variedade: f.variedade || "",
+          quantidadeSacas: f.total_sacas_carregadas || 0,
+          quantidadeInicial: f.total_sacas_carregadas || 0,
+          precoPorTonelada: f.preco_por_tonelada || 0,
+          pesoMedioSaca: f.peso_medio_saca || 25,
+          safra: f.safra || "",
+          colheitaFinalizada: f.colheita_finalizada || false,
+        }));
+
+      let nextEstoques = sortFazendasPorNome(fazendasFormatadas);
+
+      if (!resolvedFazendaId) {
+        const normalize = (value: string) =>
+          value
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+        const origemNome = frete.origem ? frete.origem.split(" - ")[0] : "";
+        const targetName = normalize(frete.fazendaNome || origemNome || "");
+        if (targetName) {
+          const match = nextEstoques.find((e) => normalize(e.fazenda) === targetName);
+          if (match) resolvedFazendaId = String(match.id);
+        }
+      }
+
+      const hasSelected = resolvedFazendaId && nextEstoques.some((e) => String(e.id) === resolvedFazendaId);
+      if (resolvedFazendaId && !hasSelected) {
+        nextEstoques = sortFazendasPorNome([
+          ...nextEstoques,
+          {
+            id: resolvedFazendaId,
+            fazendaId: resolvedFazendaId,
+            fazenda: frete.fazendaNome || frete.origem || "Fazenda",
+            estado: "",
+            mercadoria: frete.mercadoria || "",
+            variedade: frete.variedade || "",
+            quantidadeSacas: 0,
+            quantidadeInicial: 0,
+            precoPorTonelada: frete.valorPorTonelada || 0,
+            pesoMedioSaca: 25,
+            safra: "",
+            colheitaFinalizada: true,
+          },
+        ]);
+      }
+
+      setEstoquesFazendas(nextEstoques);
+      const selected = resolvedFazendaId
+        ? nextEstoques.find((e) => String(e.id) === resolvedFazendaId) || null
+        : null;
+      setEstoqueSelecionado(selected);
+    } else {
+      setEstoquesFazendas([]);
+      setEstoqueSelecionado(null);
+    }
+
+    return resolvedFazendaId;
+  };
+
+  const loadCaminhoesForEdit = async (motoristaId: string, caminhaoId?: string) => {
+    if (!motoristaId) return;
+    setCarregandoCaminhoes(true);
+    setErroCaminhoes("");
+    setCaminhoesDoMotorista([]);
+
+    try {
+      const res = await caminhoesService.listarPorMotorista(motoristaId);
+      if (res.success && res.data) {
+        setCaminhoesDoMotorista(res.data);
+        if (res.data.length === 0) {
+          setErroCaminhoes("Motorista sem caminhões vinculados");
+        } else if (caminhaoId && !res.data.some((c: any) => String(c.id) === String(caminhaoId))) {
+          // Keep selection when the truck is not in the list
+          setErroCaminhoes("Caminhão do frete não encontrado na lista");
+        }
+      } else {
+        setErroCaminhoes("Motorista inválido");
+      }
+    } catch (err) {
+      console.error("Erro ao buscar caminhões:", err);
+      setErroCaminhoes("Erro ao carregar caminhões. Tente novamente.");
+    } finally {
+      setCarregandoCaminhoes(false);
+    }
   };
 
   // Buscar caminhões do motorista selecionado
@@ -426,6 +597,7 @@ export default function Fretes() {
     setCarregandoCaminhoes(true);
     setErroCaminhoes("");
     setCaminhoesDoMotorista([]);
+    clearFormError("motoristaId");
     
     try {
       const res = await caminhoesService.listarPorMotorista(motoristaId);
@@ -444,6 +616,7 @@ export default function Fretes() {
               motoristaId, 
               caminhaoId: res.data[0].id 
             });
+            clearFormError("caminhaoId");
             toast.info(`Caminhão ${res.data[0].placa} preenchido automaticamente`);
           } else {
             // Se tiver mais de um, deixa o usuário escolher
@@ -463,17 +636,22 @@ export default function Fretes() {
     }
   };
 
-  const handleOpenEditModal = () => {
+  const handleOpenEditModal = async () => {
     if (selectedFrete) {
+      resetFormErrors();
+      const resolvedFazendaId = await loadEstoquesForEdit(selectedFrete);
+      await loadCaminhoesForEdit(selectedFrete.motoristaId, selectedFrete.caminhaoId);
       setNewFrete({
         origem: "",
         destino: selectedFrete.destino,
         motoristaId: selectedFrete.motoristaId,
         caminhaoId: selectedFrete.caminhaoId,
-        fazendaId: selectedFrete.fazendaId || "",
+        fazendaId: resolvedFazendaId || selectedFrete.fazendaId || "",
+        dataFrete: normalizeInputDate(selectedFrete.dataFrete),
         toneladas: selectedFrete.toneladas.toString(),
         valorPorTonelada: selectedFrete.valorPorTonelada.toString(),
         ticket: selectedFrete.ticket || "",
+        numeroNotaFiscal: selectedFrete.numeroNotaFiscal || "",
       });
       setIsEditingFrete(true);
       setSelectedFrete(null);
@@ -489,15 +667,25 @@ export default function Fretes() {
     if (fretesState.length > 0) {
       const found = fretesState.find((f) => String(f.id) === String(idParam));
       if (found) {
+        resetFormErrors();
+        loadEstoquesForEdit(found).then((resolvedFazendaId) => {
+          setNewFrete((prev) => ({
+            ...prev,
+            fazendaId: resolvedFazendaId || prev.fazendaId,
+          }));
+        });
+        loadCaminhoesForEdit(found.motoristaId, found.caminhaoId);
         setNewFrete({
           origem: "",
           destino: found.destino,
           motoristaId: found.motoristaId,
           caminhaoId: found.caminhaoId,
           fazendaId: found.fazendaId || "",
+          dataFrete: normalizeInputDate(found.dataFrete),
           toneladas: String(found.toneladas),
           valorPorTonelada: String(found.valorPorTonelada),
           ticket: found.ticket || "",
+          numeroNotaFiscal: found.numeroNotaFiscal || "",
         });
         setIsEditingFrete(true);
         setIsNewFreteOpen(true);
@@ -514,42 +702,68 @@ export default function Fretes() {
 
     // Validar campos (trim strings, checar null/undefined)
     const isEmpty = (v: any) => v === null || v === undefined || (typeof v === "string" && v.trim() === "");
-    if (isEmpty(newFrete.destino) || isEmpty(newFrete.motoristaId) || 
-        isEmpty(newFrete.caminhaoId) || isEmpty(newFrete.fazendaId) || isEmpty(newFrete.toneladas) || isEmpty(newFrete.valorPorTonelada)) {
-      toast.error("❌ Preencha todos os campos obrigatórios!", {
-        description: "Verifique destino, motorista, caminhão, fazenda, tonelagem e valor.",
-      });
+    const nextErrors: FormErrors = {
+      fazendaId: "",
+      destino: "",
+      motoristaId: "",
+      caminhaoId: "",
+      dataFrete: "",
+      toneladas: "",
+      valorPorTonelada: "",
+    };
+
+    if (isEmpty(newFrete.fazendaId) || !estoqueSelecionado) {
+      nextErrors.fazendaId = "Selecione a fazenda de origem.";
+    }
+    if (isEmpty(newFrete.destino)) {
+      nextErrors.destino = "Informe o destino do frete.";
+    }
+    if (isEmpty(newFrete.motoristaId)) {
+      nextErrors.motoristaId = "Selecione um motorista.";
+    }
+    if (isEmpty(newFrete.caminhaoId)) {
+      nextErrors.caminhaoId = "Selecione um caminhão.";
+    }
+    if (isEmpty(newFrete.dataFrete)) {
+      nextErrors.dataFrete = "Informe a data do frete.";
+    }
+    if (isEmpty(newFrete.toneladas)) {
+      nextErrors.toneladas = "Informe o peso em toneladas.";
+    }
+    if (isEmpty(newFrete.valorPorTonelada)) {
+      nextErrors.valorPorTonelada = "Informe o valor por tonelada.";
+    }
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setFormErrors(nextErrors);
+      triggerShake();
       setIsSavingFrete(false);
       return;
     }
 
-    if (!estoqueSelecionado) {
-      toast.error("❌ Nenhuma fazenda selecionada", {
-        description: "Escolha uma fazenda com estoque disponível para continuar.",
-      });
-      setIsSavingFrete(false);
-      return;
-    }
-
-    const toneladas = parseFloat(newFrete.toneladas);
+    const toneladas = toNumber(newFrete.toneladas);
     if (isNaN(toneladas) || toneladas <= 0) {
-      toast.error("❌ Tonelagem inválida", {
-        description: "Digite um valor maior que zero.",
-      });
+      setFormErrors((prev) => ({
+        ...prev,
+        toneladas: "Informe um peso valido (maior que zero).",
+      }));
+      triggerShake();
       setIsSavingFrete(false);
       return;
     }
 
-    const valorPorTonelada = parseFloat(newFrete.valorPorTonelada);
+    const valorPorTonelada = toNumber(newFrete.valorPorTonelada);
     if (isNaN(valorPorTonelada) || valorPorTonelada <= 0) {
-      toast.error("❌ Valor por tonelada inválido", {
-        description: "Digite um valor maior que zero.",
-      });
+      setFormErrors((prev) => ({
+        ...prev,
+        valorPorTonelada: "Informe um valor valido (maior que zero).",
+      }));
+      triggerShake();
       setIsSavingFrete(false);
       return;
     }
 
-    // Converter toneladas para sacas
+    // Converter toneladas para sacas (toneladas em t, pesoMedioSaca em KG)
     const quantidadeSacas = Math.round((toneladas * 1000) / estoqueSelecionado.pesoMedioSaca);
 
     // Buscar dados selecionados
@@ -589,25 +803,32 @@ export default function Fretes() {
       return;
     }
 
+    const toUpper = (value: string) => value.trim().toUpperCase();
+    const toUpperOrUndefined = (value?: string | null) => {
+      const trimmed = (value ?? "").trim();
+      return trimmed ? trimmed.toUpperCase() : undefined;
+    };
+
     // Preparar payload para API
     const payload = {
-      origem: `${estoqueSelecionado.fazenda} - ${estoqueSelecionado.estado}`,
-      destino: newFrete.destino,
+      origem: toUpper(`${estoqueSelecionado.fazenda} - ${estoqueSelecionado.estado}`),
+      destino: toUpper(newFrete.destino || ""),
       motorista_id: String(motorista.id),
-      motorista_nome: motorista.nome,
+      motorista_nome: toUpper(motorista.nome),
       caminhao_id: String(caminhao.id),
-      caminhao_placa: caminhao.placa,
+      caminhao_placa: toUpper(caminhao.placa),
       fazenda_id: String(newFrete.fazendaId),
-      fazenda_nome: estoqueSelecionado.fazenda,
-      mercadoria: estoqueSelecionado.mercadoria,
+      fazenda_nome: toUpper(estoqueSelecionado.fazenda),
+      mercadoria: toUpper(estoqueSelecionado.mercadoria),
       mercadoria_id: String(estoqueSelecionado.id),
-      variedade: estoqueSelecionado.variedade,
-      data_frete: format(new Date(), "yyyy-MM-dd"),
+      variedade: toUpperOrUndefined(estoqueSelecionado.variedade),
+      data_frete: newFrete.dataFrete || getTodayInputDate(),
       quantidade_sacas: quantidadeSacas,
       toneladas: toneladas,
       valor_por_tonelada: valorPorTonelada,
       custos: custos,
       ticket: newFrete.ticket || null,
+      numero_nota_fiscal: newFrete.numeroNotaFiscal || null,
     };
 
     // Criar frete via API
@@ -652,9 +873,11 @@ export default function Fretes() {
         motoristaId: "",
         caminhaoId: "",
         fazendaId: "",
+        dataFrete: getTodayInputDate(),
         toneladas: "",
         valorPorTonelada: "",
         ticket: "",
+        numeroNotaFiscal: "",
       });
       setEstoqueSelecionado(null);
       endRefresh();
@@ -716,17 +939,6 @@ export default function Fretes() {
     return `FRETE-${year}-${String(seq).padStart(3, "0")}`;
   };
 
-  // Função para fechar/abrir o mês
-  const handleToggleFecharMes = () => {
-    const mesFechado = mesesFechados.includes(selectedPeriodo);
-    if (mesFechado) {
-      setMesesFechados(mesesFechados.filter((m) => m !== selectedPeriodo));
-      toast.success(`Mês ${selectedPeriodo} reaberto para edição`);
-    } else {
-      setMesesFechados([...mesesFechados, selectedPeriodo]);
-      toast.success(`Mês ${selectedPeriodo} fechado com sucesso!`);
-    }
-  };
 
   // Função para exportar PDF profissional
   const handleExportarPDF = () => {
@@ -1319,27 +1531,6 @@ export default function Fretes() {
               </Select>
             </div>
 
-            {/* Botão Fechar/Abrir Mês (apenas para mensal) */}
-            {tipoVisualizacao === "mensal" && (
-              <Button
-                variant={mesesFechados.includes(selectedPeriodo) ? "outline" : "secondary"}
-                onClick={handleToggleFecharMes}
-                className="gap-2"
-              >
-                {mesesFechados.includes(selectedPeriodo) ? (
-                  <>
-                    <Unlock className="h-4 w-4" />
-                    Reabrir Mês
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-4 w-4" />
-                    Fechar Mês
-                  </>
-                )}
-              </Button>
-            )}
-
             {/* Botão Exportar PDF */}
             <Button variant="outline" onClick={handleExportarPDF} className="gap-2">
               <FileDown className="h-4 w-4" />
@@ -1347,26 +1538,13 @@ export default function Fretes() {
             </Button>
 
             {/* Botão Novo Frete */}
-            <Button 
-              onClick={handleOpenNewModal}
-              disabled={tipoVisualizacao === "mensal" && mesesFechados.includes(selectedPeriodo)}
-            >
+            <Button onClick={handleOpenNewModal}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Frete
             </Button>
           </div>
         }
       />
-
-      {/* Badge de Status do Mês */}
-      {tipoVisualizacao === "mensal" && mesesFechados.includes(selectedPeriodo) && (
-        <div className="mb-4 flex items-center gap-2 p-2 md:p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
-          <Lock className="h-4 w-4 text-blue-600 flex-shrink-0" />
-          <p className="text-xs md:text-sm font-semibold text-blue-700 dark:text-blue-400">
-            Este mês está fechado. Novos fretes e edições não são permitidos.
-          </p>
-        </div>
-      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
@@ -1611,29 +1789,6 @@ export default function Fretes() {
                     Exportar PDF
                   </Button>
 
-                  {/* Botão Fechar/Abrir Mês (apenas para mensal) */}
-                  {tipoVisualizacao === "mensal" && (
-                    <Button
-                      variant={mesesFechados.includes(selectedPeriodo) ? "outline" : "secondary"}
-                      onClick={() => {
-                        handleToggleFecharMes();
-                        setFiltersOpen(false);
-                      }}
-                      className="w-full gap-2"
-                    >
-                      {mesesFechados.includes(selectedPeriodo) ? (
-                        <>
-                          <Unlock className="h-4 w-4" />
-                          Reabrir Mês
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="h-4 w-4" />
-                          Fechar Mês
-                        </>
-                      )}
-                    </Button>
-                  )}
                 </div>
               </div>
 
@@ -1743,7 +1898,6 @@ export default function Fretes() {
       {/* FAB: Novo Frete (Mobile Only) */}
       <Button
         onClick={handleOpenNewModal}
-        disabled={tipoVisualizacao === "mensal" && mesesFechados.includes(selectedPeriodo)}
         className="lg:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
         size="icon"
         aria-label="Novo Frete"
@@ -2094,7 +2248,14 @@ export default function Fretes() {
       </Dialog>
 
       {/* New/Edit Frete Modal */}
-      <Dialog open={isNewFreteOpen} onOpenChange={(open) => !isSavingFrete && setIsNewFreteOpen(open)}>
+      <Dialog
+        open={isNewFreteOpen}
+        onOpenChange={(open) => {
+          if (isSavingFrete) return;
+          setIsNewFreteOpen(open);
+          resetFormErrors();
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2105,7 +2266,7 @@ export default function Fretes() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 max-h-[calc(90vh-200px)] overflow-y-auto px-1">
+          <div className={cn("space-y-3 max-h-[calc(90vh-200px)] overflow-y-auto px-1", isShaking && "animate-shake")}>
             {/* Seção: Fazenda de Origem */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-2">
@@ -2128,9 +2289,16 @@ export default function Fretes() {
                         fazendaId: String(estoque?.fazendaId || v),
                         valorPorTonelada: estoque ? estoque.precoPorTonelada.toString() : ""
                       });
+                      clearFormError("fazendaId");
+                    }}
+                    onOpenChange={(open) => {
+                      if (open) clearFormError("fazendaId");
                     }}
                   >
-                    <SelectTrigger id="fazenda">
+                    <SelectTrigger
+                      id="fazenda"
+                      className={cn(fieldErrorClass(formErrors.fazendaId))}
+                    >
                       <SelectValue placeholder="Selecione a fazenda produtora" />
                     </SelectTrigger>
                     <SelectContent className="max-h-64 overflow-y-auto">
@@ -2166,6 +2334,7 @@ export default function Fretes() {
                       )}
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.fazendaId} />
                 </div>
 
                 {/* Preview do Estoque Selecionado */}
@@ -2223,9 +2392,18 @@ export default function Fretes() {
                 </Label>
                 <Select
                   value={newFrete.destino}
-                  onValueChange={(v) => setNewFrete({ ...newFrete, destino: v })}
+                  onValueChange={(v) => {
+                    setNewFrete({ ...newFrete, destino: v });
+                    clearFormError("destino");
+                  }}
+                  onOpenChange={(open) => {
+                    if (open) clearFormError("destino");
+                  }}
                 >
-                  <SelectTrigger id="destino">
+                  <SelectTrigger
+                    id="destino"
+                    className={cn(fieldErrorClass(formErrors.destino))}
+                  >
                     <SelectValue placeholder="Selecione o local de entrega" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2233,17 +2411,54 @@ export default function Fretes() {
                     <SelectItem value="Fazenda Santa Rosa - Secagem e Armazenagem">Fazenda Santa Rosa - Secagem e Armazenagem</SelectItem>
                   </SelectContent>
                 </Select>
-                <div className="space-y-2 mt-2">
-                  <Label htmlFor="ticket-frete" className="flex items-center gap-2">
-                    <Info className="h-4 w-4 text-muted-foreground" />
-                    Ticket (balança)
-                  </Label>
-                  <Input
-                    id="ticket-frete"
-                    placeholder="0123"
-                    value={newFrete.ticket}
-                    onChange={(e) => setNewFrete({ ...newFrete, ticket: e.target.value })}
-                  />
+                <FieldError message={formErrors.destino} />
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="space-y-2">
+                    <Label htmlFor="data-frete" className="flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                      Data do Frete *
+                    </Label>
+                    <DatePicker
+                      id="data-frete"
+                      value={newFrete.dataFrete ? new Date(newFrete.dataFrete) : undefined}
+                      onChange={(date) => {
+                        if (!date) return;
+                        setNewFrete({ ...newFrete, dataFrete: format(date, "yyyy-MM-dd") });
+                        clearFormError("dataFrete");
+                      }}
+                      onOpenChange={(open) => {
+                        if (open) clearFormError("dataFrete");
+                      }}
+                      buttonClassName={cn(fieldErrorClass(formErrors.dataFrete))}
+                    />
+                    <FieldError message={formErrors.dataFrete} />
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <Label htmlFor="ticket-frete" className="flex items-center gap-2">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      Ticket (balança)
+                    </Label>
+                    <Input
+                      id="ticket-frete"
+                      placeholder="0123"
+                      value={newFrete.ticket}
+                      onChange={(e) => setNewFrete({ ...newFrete, ticket: e.target.value })}
+                    />
+                  </div>
+                  {estoqueSelecionado?.estado === "MS" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="nota-fiscal-frete" className="flex items-center gap-2">
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                        Nº Nota Fiscal
+                      </Label>
+                      <Input
+                        id="nota-fiscal-frete"
+                        placeholder="12.345.678"
+                        value={newFrete.numeroNotaFiscal}
+                        onChange={(e) => setNewFrete({ ...newFrete, numeroNotaFiscal: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2265,8 +2480,14 @@ export default function Fretes() {
                   <Select 
                     value={newFrete.motoristaId} 
                     onValueChange={handleMotoristaChange}
+                    onOpenChange={(open) => {
+                      if (open) clearFormError("motoristaId");
+                    }}
                   >
-                    <SelectTrigger id="motorista">
+                    <SelectTrigger
+                      id="motorista"
+                      className={cn(fieldErrorClass(formErrors.motoristaId))}
+                    >
                       <SelectValue placeholder="Selecione um motorista" />
                     </SelectTrigger>
                     <SelectContent className="max-h-64 overflow-y-auto">
@@ -2285,6 +2506,7 @@ export default function Fretes() {
                       })}
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.motoristaId} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="caminhao" className="flex items-center gap-2">
@@ -2292,11 +2514,21 @@ export default function Fretes() {
                     Caminhão *
                   </Label>
                   {!newFrete.motoristaId ? (
-                    <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                    <div
+                      className={cn(
+                        "flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground",
+                        formErrors.caminhaoId && "border-red-500"
+                      )}
+                    >
                       Selecione um motorista primeiro
                     </div>
                   ) : carregandoCaminhoes ? (
-                    <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                    <div
+                      className={cn(
+                        "flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground",
+                        formErrors.caminhaoId && "border-red-500"
+                      )}
+                    >
                       ⏳ Carregando caminhões...
                     </div>
                   ) : erroCaminhoes ? (
@@ -2304,11 +2536,21 @@ export default function Fretes() {
                       ❌ {erroCaminhoes}
                     </div>
                   ) : caminhoesDoMotorista.length === 0 ? (
-                    <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                    <div
+                      className={cn(
+                        "flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground",
+                        formErrors.caminhaoId && "border-red-500"
+                      )}
+                    >
                       Nenhum caminhão disponível
                     </div>
                   ) : caminhoesDoMotorista.length === 1 ? (
-                    <div className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">
+                    <div
+                      className={cn(
+                        "flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted/50 px-3 py-2 text-sm",
+                        formErrors.caminhaoId && "border-red-500"
+                      )}
+                    >
                       <div className="flex items-center gap-2">
                         <Truck className="h-4 w-4 text-primary" />
                         <span className="font-medium">{caminhoesDoMotorista[0].placa}</span>
@@ -2318,9 +2560,18 @@ export default function Fretes() {
                   ) : (
                     <Select 
                       value={newFrete.caminhaoId} 
-                      onValueChange={(v) => setNewFrete({ ...newFrete, caminhaoId: v })}
+                      onValueChange={(v) => {
+                        setNewFrete({ ...newFrete, caminhaoId: v });
+                        clearFormError("caminhaoId");
+                      }}
+                      onOpenChange={(open) => {
+                        if (open) clearFormError("caminhaoId");
+                      }}
                     >
-                      <SelectTrigger id="caminhao">
+                      <SelectTrigger
+                        id="caminhao"
+                        className={cn(fieldErrorClass(formErrors.caminhaoId))}
+                      >
                         <SelectValue placeholder="Selecione um caminhão" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2332,6 +2583,7 @@ export default function Fretes() {
                       </SelectContent>
                     </Select>
                   )}
+                  <FieldError message={formErrors.caminhaoId} />
                 </div>
               </div>
             </div>
@@ -2348,7 +2600,7 @@ export default function Fretes() {
                 <div className="space-y-2">
                   <Label htmlFor="toneladas" className="flex items-center gap-2">
                     <Weight className="h-4 w-4 text-blue-600" />
-                    Toneladas *
+                    Peso *
                   </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
@@ -2356,19 +2608,35 @@ export default function Fretes() {
                     </span>
                     <Input
                       id="toneladas"
-                      type="number"
-                      placeholder="Ex: 10.5"
-                      step="0.1"
-                      min="0.1"
-                      className="pl-8"
+                      placeholder="Ex: 20.555"
+                      className={cn("pl-12", fieldErrorClass(formErrors.toneladas))}
                       value={newFrete.toneladas}
-                      onChange={(e) => setNewFrete({ ...newFrete, toneladas: e.target.value })}
+                      onChange={(e) => {
+                        let valor = e.target.value;
+                        // Keep only digits and format as t+kg (last 3 digits are kg)
+                        const digits = valor.replace(/\D/g, "");
+
+                        if (!digits) {
+                          setNewFrete({ ...newFrete, toneladas: "" });
+                          return;
+                        }
+
+                        const formatted =
+                          digits.length > 3
+                            ? `${digits.slice(0, -3)}.${digits.slice(-3)}`
+                            : digits;
+
+                        setNewFrete({ ...newFrete, toneladas: formatted });
+                        clearFormError("toneladas");
+                      }}
+                      onFocus={() => clearFormError("toneladas")}
                       disabled={!estoqueSelecionado}
                     />
                   </div>
+                  <FieldError message={formErrors.toneladas} />
                   {estoqueSelecionado && newFrete.toneladas && (
                     <p className="text-xs text-blue-600">
-                      ≈ {Math.round((parseFloat(newFrete.toneladas) * 1000) / estoqueSelecionado.pesoMedioSaca).toLocaleString("pt-BR")} sacas ({estoqueSelecionado.pesoMedioSaca}kg cada)
+                      ≈ {Math.round((toNumber(newFrete.toneladas) * 1000) / estoqueSelecionado.pesoMedioSaca).toLocaleString("pt-BR")} sacas ({estoqueSelecionado.pesoMedioSaca}kg cada)
                     </p>
                   )}
                 </div>
@@ -2384,16 +2652,34 @@ export default function Fretes() {
                     </span>
                     <Input
                       id="valorTonelada"
-                      type="number"
-                      placeholder="Ex: 600.00"
-                      step="0.01"
-                      min="0.01"
-                      className="pl-12"
+                      placeholder="Ex: 200.00"
+                      className={cn("pl-12", fieldErrorClass(formErrors.valorPorTonelada))}
                       value={newFrete.valorPorTonelada}
-                      onChange={(e) => setNewFrete({ ...newFrete, valorPorTonelada: e.target.value })}
+                      onChange={(e) => {
+                        let valor = e.target.value;
+                        
+                        // Remove tudo que não é número ou ponto
+                        valor = valor.replace(/[^\d.]/g, '');
+                        
+                        if (!valor) {
+                          setNewFrete({ ...newFrete, valorPorTonelada: "" });
+                          return;
+                        }
+                        
+                        // Garante apenas um ponto
+                        const partes = valor.split('.');
+                        if (partes.length > 2) {
+                          valor = partes.slice(0, -1).join('') + '.' + partes[partes.length - 1];
+                        }
+                        
+                        setNewFrete({ ...newFrete, valorPorTonelada: valor });
+                        clearFormError("valorPorTonelada");
+                      }}
+                      onFocus={() => clearFormError("valorPorTonelada")}
                       disabled={!estoqueSelecionado}
                     />
                   </div>
+                  <FieldError message={formErrors.valorPorTonelada} />
                   {estoqueSelecionado && (
                     <p className="text-xs text-green-600">
                       ✓ Preço cadastrado na fazenda: R$ {estoqueSelecionado.precoPorTonelada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ton
@@ -2402,7 +2688,7 @@ export default function Fretes() {
                 </div>
 
                 {/* Preview da Carga */}
-                {estoqueSelecionado && newFrete.toneladas && parseFloat(newFrete.toneladas) > 0 && newFrete.valorPorTonelada && parseFloat(newFrete.valorPorTonelada) > 0 && (
+                {estoqueSelecionado && newFrete.toneladas && newFrete.valorPorTonelada && (
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center gap-2">
@@ -2413,19 +2699,19 @@ export default function Fretes() {
                         <div>
                           <p className="text-xs text-muted-foreground">Toneladas</p>
                           <p className="font-bold text-foreground">
-                            {parseFloat(newFrete.toneladas).toFixed(2)} t
+                            {toNumber(newFrete.toneladas).toFixed(2)} t
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Sacas (aproximado)</p>
                           <p className="font-bold text-foreground">
-                            {Math.round((parseFloat(newFrete.toneladas) * 1000) / estoqueSelecionado.pesoMedioSaca).toLocaleString("pt-BR")}
+                            {Math.round((toNumber(newFrete.toneladas) * 1000) / estoqueSelecionado.pesoMedioSaca).toLocaleString("pt-BR")}
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Receita Estimada</p>
                           <p className="font-bold text-profit">
-                            R$ {(parseFloat(newFrete.toneladas) * parseFloat(newFrete.valorPorTonelada)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            R$ {(toNumber(newFrete.toneladas) * toNumber(newFrete.valorPorTonelada)).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       </div>
@@ -2446,10 +2732,13 @@ export default function Fretes() {
                   motoristaId: "",
                   caminhaoId: "",
                   fazendaId: "",
+                  dataFrete: getTodayInputDate(),
                   toneladas: "",
                   valorPorTonelada: "",
                   ticket: "",
+                  numeroNotaFiscal: "",
                 });
+                resetFormErrors();
                 setEstoqueSelecionado(null);
               }}
               onSubmit={handleSaveFrete}

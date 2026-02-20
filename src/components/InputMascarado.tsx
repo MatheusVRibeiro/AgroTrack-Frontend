@@ -1,17 +1,21 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { FieldError, fieldErrorClass } from '@/components/shared/FieldError';
+import { cn } from '@/lib/utils';
 import { 
   formatarCPF, 
   formatarTelefone, 
   formatarCEP, 
   formatarDocumento,
-  apenasNumeros 
+  apenasNumeros,
+  formatarToneladas,
+  formatarValorPorTonelada
 } from '@/utils/formatters';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
-  tipoMascara?: 'cpf' | 'documento' | 'telefone' | 'cep' | 'numero';
+  tipoMascara?: 'cpf' | 'documento' | 'telefone' | 'cep' | 'numero' | 'toneladas' | 'valor-tonelada';
   erro?: string;
   onDetectTipoDocumento?: (tipo: 'cpf' | 'cnpj') => void;
 }
@@ -41,6 +45,8 @@ export const InputMascarado: React.FC<InputProps> = ({
     if (tipoMascara === 'telefone') valor = formatarTelefone(valor);
     if (tipoMascara === 'cep') valor = formatarCEP(valor);
     if (tipoMascara === 'numero') valor = apenasNumeros(valor);
+    if (tipoMascara === 'toneladas') valor = formatarToneladas(valor);
+    if (tipoMascara === 'valor-tonelada') valor = formatarValorPorTonelada(valor);
 
     // Cria um evento "falso" para o onChange do React continuar funcionando
     const novoEvento = {
@@ -58,9 +64,9 @@ export const InputMascarado: React.FC<InputProps> = ({
         {...props}
         value={value}
         onChange={handleChange}
-        className={erro ? 'border-red-500 focus-visible:ring-red-500' : ''}
+        className={cn(props.className, fieldErrorClass(erro))}
       />
-      {erro && <p className="text-sm text-red-500 dark:text-red-400">{erro}</p>}
+      <FieldError message={erro} />
     </div>
   );
 };

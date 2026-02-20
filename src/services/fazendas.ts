@@ -34,11 +34,12 @@ const normalizePayloadToBackend = (payload: CriarFazendaPayload | Partial<CriarF
   return normalized;
 };
 
-const listarFazendas = async (): Promise<ApiResponse<Fazenda[]>> => {
+const listarFazendas = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Fazenda[]>> => {
   try {
-    const res = await api.get("/fazendas");
+    const { page = 1, limit = 50 } = params ?? {};
+    const res = await api.get("/fazendas", { params: { page, limit } });
     const data = normalizeListResponse(res.data.data || res.data);
-    return { success: true, data, status: res.status };
+    return { success: true, data, meta: res.data.meta, status: res.status };
   } catch (err: unknown) {
     let message = "Erro ao listar fazendas";
     if (isAxiosError(err)) {

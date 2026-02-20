@@ -5,6 +5,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -47,6 +48,7 @@ import { ITEMS_PER_PAGE } from "@/lib/pagination";
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
 import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { useRefreshData } from "@/hooks/useRefreshData";
+import { useShake } from "@/hooks/useShake";
 
 const statusConfig = {
   disponivel: { label: "Disponível", variant: "active" as const },
@@ -71,19 +73,31 @@ export default function Frota() {
   // Query para buscar caminhões
   const { data: caminhoesResponse, isLoading } = useQuery({
     queryKey: ["caminhoes"],
-    queryFn: caminhoesService.listarCaminhoes,
+    queryFn: () => caminhoesService.listarCaminhoes(),
+    refetchOnMount: "always",
   });
 
   // Query para buscar motoristas
   const { data: motoristasResponse, isLoading: isLoadingMotoristas } = useQuery({
     queryKey: ["motoristas"],
-    queryFn: motoristasService.listarMotoristas,
+    queryFn: () => motoristasService.listarMotoristas(),
+    refetchOnMount: "always",
   });
 
   const caminhoes = caminhoesResponse?.data || [];
   const motoristasDisponiveis = sortMotoristasPorNome(motoristasResponse?.data || []);
   const [autoFilledFields, setAutoFilledFields] = useState<{ placa?: boolean; motorista?: boolean; proprietario_tipo?: boolean }>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const resetFormErrors = () => setFormErrors({});
+  const clearFormError = (field: string) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+  const { isShaking, triggerShake } = useShake(220);
 
   // Plate helpers usable across handlers
   const normalizePlate = (p?: string) => (p ? p.trim().toUpperCase() : "");
@@ -239,6 +253,18 @@ export default function Frota() {
   const handleSave = () => {
     if (isSaving) return;
 
+    const nextErrors: Record<string, string> = {};
+    if (!String(editedCaminhao.placa || "").trim()) nextErrors.placa = "Placa é obrigatória.";
+    if (!String(editedCaminhao.modelo || "").trim()) nextErrors.modelo = "Modelo é obrigatório.";
+    if (!editedCaminhao.tipo_veiculo) nextErrors.tipo_veiculo = "Tipo de veículo é obrigatório.";
+    if (!editedCaminhao.ano_fabricacao) nextErrors.ano_fabricacao = "Ano é obrigatório.";
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFormErrors(nextErrors);
+      triggerShake();
+      return;
+    }
+
     // Simple client-side validation to avoid 400 from backend
     const normalizePlate = (p?: string) => (p ? p.trim().toUpperCase() : "");
     const stripNonAlnum = (s: string) => s.replace(/[^A-Z0-9]/gi, "");
@@ -269,12 +295,14 @@ export default function Frota() {
     const placaNorm = formatPlateWithDash(editedCaminhao.placa as string);
     if (!placaNorm || !isValidPlate(placaNorm)) {
       setFormErrors({ placa: "Placa inválida. Use formato ABC-1234 ou BWJ-9B60 (Mercosul)." });
+      triggerShake();
       return;
     }
 
     const placaCarreta = formatPlateWithDash(editedCaminhao.placa_carreta as string);
     if (editedCaminhao.placa_carreta && !isValidPlate(placaCarreta)) {
       setFormErrors({ placa_carreta: "Placa da carreta inválida." });
+      triggerShake();
       return;
     }
 
@@ -284,6 +312,7 @@ export default function Frota() {
       const num = Number(editedCaminhao.capacidade_toneladas);
       if (!(num > 0)) {
         setFormErrors({ capacidade_toneladas: "Capacidade deve ser maior que 0" });
+        triggerShake();
         return;
       }
       capacidadeNormalized = num;
@@ -310,8 +339,8 @@ export default function Frota() {
     }
 
     const payload: CriarCaminhaoPayload = {
-      placa: placaNorm as string,
-      modelo: String(editedCaminhao.modelo || ""),
+      placa: placaNorm.toUpperCase() as string,
+      modelo: String(editedCaminhao.modelo || "").trim().toUpperCase(),
       // Some backends expect year as string — ensure consistent typing
       ano_fabricacao: typeof editedCaminhao.ano_fabricacao === 'number' ? String(editedCaminhao.ano_fabricacao) as any : (editedCaminhao.ano_fabricacao as any),
       capacidade_toneladas: capacidadeNormalized as number,
@@ -330,7 +359,7 @@ export default function Frota() {
       validade_licenciamento: editedCaminhao.validade_licenciamento || undefined,
       ultima_manutencao_data: editedCaminhao.ultima_manutencao_data || undefined,
       proxima_manutencao_km: editedCaminhao.proxima_manutencao_km || undefined,
-      placa_carreta: (editedCaminhao.tipo_veiculo && ["CARRETA", "BITREM", "TRUCK"].includes(editedCaminhao.tipo_veiculo as string)) ? (placaCarreta || undefined) : undefined,
+      placa_carreta: (editedCaminhao.tipo_veiculo && ["CARRETA", "BITREM", "TRUCK"].includes(editedCaminhao.tipo_veiculo as string)) ? (placaCarreta ? placaCarreta.toUpperCase() : undefined) : undefined,
     };
 
     // Normalize optional empty strings to null before sending
@@ -410,28 +439,17 @@ export default function Frota() {
             </div>
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-mono font-bold text-base text-foreground tracking-wide">{item.placa}</p>
-                {item.placa_carreta ? (
-                  <Badge className="text-xs font-mono">{item.placa_carreta}</Badge>
+                <p className="font-semibold text-base text-foreground tracking-wide">{item.placa}</p>
+                {item.tipo_veiculo ? (
+                  <Badge variant="secondary" className="text-[10px] py-0 px-2">{item.tipo_veiculo}</Badge>
                 ) : null}
                 <p className="text-xs text-muted-foreground font-medium">{item.modelo}</p>
+                {item.placa_carreta ? (
+                  <Badge className="text-xs font-semibold">{item.placa_carreta}</Badge>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
-                {formErrors.placa ? (
-                  <p className="text-sm text-red-500 mr-2">{formErrors.placa}</p>
-                ) : null}
                 <span className="text-xs text-muted-foreground">{item.ano_fabricacao}</span>
-                {item.tipo_veiculo ? (
-                  <Badge variant="secondary" className="text-[10px] py-0 px-2 ml-2">{item.tipo_veiculo}</Badge>
-                ) : null}
-                {item.proprietario_tipo ? (
-                  <Badge
-                    variant={item.proprietario_tipo === "PROPRIO" ? "default" : "outline"}
-                    className="text-xs ml-2"
-                  >
-                    {item.proprietario_tipo}
-                  </Badge>
-                ) : null}
               </div>
             </div>
           </div>
@@ -498,12 +516,22 @@ export default function Frota() {
               <span className="text-[10px] text-muted-foreground">km</span>
             </div>
           </div>
-          {item.tipo_combustivel && (
+          {(item.tipo_combustivel || item.proprietario_tipo) && (
             <div className="flex items-center gap-2">
               <Fuel className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-              <Badge variant="outline" className="text-[10px] font-semibold py-0 px-2">
-                {item.tipo_combustivel}
-              </Badge>
+              {item.tipo_combustivel && (
+                <Badge variant="outline" className="text-[10px] font-semibold py-0 px-2">
+                  {item.tipo_combustivel}
+                </Badge>
+              )}
+              {item.proprietario_tipo && (
+                <Badge
+                  variant={item.proprietario_tipo === "PROPRIO" ? "default" : "outline"}
+                  className="text-[10px] font-semibold py-0 px-2"
+                >
+                  {item.proprietario_tipo}
+                </Badge>
+              )}
             </div>
           )}
         </div>
@@ -858,7 +886,7 @@ export default function Frota() {
 
       {/* Details Modal */}
       <Dialog open={!!selectedCaminhao && !isEditing} onOpenChange={() => setSelectedCaminhao(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className={`max-w-3xl ${isShaking ? "animate-shake" : ""}`}>
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -892,7 +920,7 @@ export default function Frota() {
                       <Truck className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <p className="text-2xl font-mono font-bold mb-1">{selectedCaminhao.placa}</p>
+                      <p className="text-2xl font-bold mb-1 tracking-wide">{selectedCaminhao.placa}</p>
                       <p className="text-base font-semibold mb-1.5">{selectedCaminhao.modelo}</p>
                       <Badge variant={statusConfig[selectedCaminhao.status].variant} className="text-xs">
                         {statusConfig[selectedCaminhao.status].label}
@@ -1109,8 +1137,15 @@ export default function Frota() {
       </Dialog>
 
       {/* Create/Edit Modal */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => !isSaving && setIsModalOpen(open)}>
-        <DialogContent className="max-w-3xl">
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (isSaving) return;
+          setIsModalOpen(open);
+          resetFormErrors();
+        }}
+      >
+        <DialogContent className={`max-w-3xl ${isShaking ? "animate-shake" : ""}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -1131,7 +1166,7 @@ export default function Frota() {
                 <h3 className="font-semibold text-foreground">Identificação e Especificações</h3>
               </div>
               
-              {/* Placas e Modelo */}
+              {/* Placa e Tipo de Veículo */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 <div className="space-y-2">
@@ -1142,51 +1177,20 @@ export default function Frota() {
                   <Input
                     id="placa"
                     placeholder="ABC-1234"
+                    maxLength={8}
                     value={editedCaminhao.placa || ""}
-                    className={`font-mono font-semibold ${autoFilledFields.placa ? 'bg-blue-50 dark:bg-blue-900/40' : ''}`}
+                    className={`font-semibold ${autoFilledFields.placa ? 'bg-blue-50 dark:bg-blue-900/40' : ''} ${fieldErrorClass(formErrors.placa)}`}
                     onChange={(e) => {
-                      const value = e.target.value.toUpperCase();
+                      const value = formatPlateAsUserTypes(e.target.value);
                       setEditedCaminhao({ ...editedCaminhao, placa: value });
                       // limpar marcação de auto-fill quando usuário digita manualmente
                       setAutoFilledFields({});
+                      clearFormError("placa");
                     }}
+                    onFocus={() => clearFormError("placa")}
                   />
-                  <p className="text-xs text-muted-foreground">Placa do caminhão trator</p>
+                  <FieldError message={formErrors.placa} />
                   
-                </div>
-                
-                {/* Placa da Carreta - Mostrada apenas para tipos que precisam */}
-                {editedCaminhao.tipo_veiculo && ["CARRETA", "BITREM", "TRUCK"].includes(editedCaminhao.tipo_veiculo) && (
-                  <div className="space-y-2">
-                    <Label htmlFor="placaCarreta" className="flex items-center gap-2">
-                      <Info className="h-4 w-4 text-blue-600" />
-                      Placa da Carreta
-                    </Label>
-                    <Input
-                      id="placaCarreta"
-                      placeholder="CRT-5678"
-                      className="font-mono font-semibold"
-                    value={editedCaminhao.placa_carreta || ""}
-                      onChange={(e) => setEditedCaminhao({ ...editedCaminhao, placa_carreta: e.target.value.toUpperCase() })}
-                    />
-                    <p className="text-xs text-muted-foreground">Placa do reboque/carreta</p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Modelo e Tipo de Veículo */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="modelo" className="flex items-center gap-2">
-                    <Truck className="h-4 w-4 text-primary" />
-                    Modelo *
-                  </Label>
-                  <Input
-                    id="modelo"
-                    placeholder="Ex: Volvo FH 540"
-                    value={editedCaminhao.modelo || ""}
-                    onChange={(e) => setEditedCaminhao({ ...editedCaminhao, modelo: e.target.value })}
-                  />
                 </div>
                 
                 <div className="space-y-2">
@@ -1196,11 +1200,12 @@ export default function Frota() {
                   </Label>
                   <Select
                     value={editedCaminhao.tipo_veiculo || ""}
-                    onValueChange={(value: "TRUCK" | "TOCO" | "CARRETA" | "BITREM") => 
-                      setEditedCaminhao({ ...editedCaminhao, tipo_veiculo: value })
-                    }
+                    onValueChange={(value: "TRUCK" | "TOCO" | "CARRETA" | "BITREM") => {
+                      setEditedCaminhao({ ...editedCaminhao, tipo_veiculo: value });
+                      clearFormError("tipo_veiculo");
+                    }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={fieldErrorClass(formErrors.tipo_veiculo)}>
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1210,7 +1215,55 @@ export default function Frota() {
                       <SelectItem value="BITREM">Bitrem</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.tipo_veiculo} />
                 </div>
+              </div>
+              
+              {/* Modelo e Placa da Carreta */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="modelo" className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-primary" />
+                    Modelo *
+                  </Label>
+                  <Input
+                    id="modelo"
+                    placeholder="Ex: Volvo FH 540"
+                    className={`uppercase ${fieldErrorClass(formErrors.modelo)}`}
+                    value={editedCaminhao.modelo || ""}
+                    onChange={(e) => {
+                      setEditedCaminhao({ ...editedCaminhao, modelo: e.target.value.toUpperCase() });
+                      clearFormError("modelo");
+                    }}
+                    onFocus={() => clearFormError("modelo")}
+                  />
+                  <FieldError message={formErrors.modelo} />
+                </div>
+
+                {editedCaminhao.tipo_veiculo && ["CARRETA", "BITREM", "TRUCK"].includes(editedCaminhao.tipo_veiculo) ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="placaCarreta" className="flex items-center gap-2">
+                      <Info className="h-4 w-4 text-blue-600" />
+                      Placa da Carreta
+                    </Label>
+                    <Input
+                      id="placaCarreta"
+                      placeholder="CRT-5678"
+                      className={`font-semibold ${fieldErrorClass(formErrors.placa_carreta)}`}
+                      maxLength={8}
+                      value={editedCaminhao.placa_carreta || ""}
+                      onChange={(e) => {
+                        const formatted = formatPlateAsUserTypes(e.target.value);
+                        setEditedCaminhao({ ...editedCaminhao, placa_carreta: formatted });
+                        clearFormError("placa_carreta");
+                      }}
+                      onFocus={() => clearFormError("placa_carreta")}
+                    />
+                    <FieldError message={formErrors.placa_carreta} />
+                  </div>
+                ) : (
+                  <div />
+                )}
               </div>
               
               {/* Especificações Técnicas */}
@@ -1222,9 +1275,12 @@ export default function Frota() {
                   </Label>
                   <Select
                     value={(editedCaminhao.ano_fabricacao ? String(editedCaminhao.ano_fabricacao) : "")}
-                    onValueChange={(value) => setEditedCaminhao({ ...editedCaminhao, ano_fabricacao: value ? parseInt(value) : undefined })}
+                    onValueChange={(value) => {
+                      setEditedCaminhao({ ...editedCaminhao, ano_fabricacao: value ? parseInt(value) : undefined });
+                      clearFormError("ano_fabricacao");
+                    }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={fieldErrorClass(formErrors.ano_fabricacao)}>
                       <SelectValue placeholder="Selecione o ano" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1237,6 +1293,7 @@ export default function Frota() {
                       })()}
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.ano_fabricacao} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="capacidadeToneladas" className="flex items-center gap-2">
@@ -1252,14 +1309,14 @@ export default function Frota() {
                       value={editedCaminhao.capacidade_toneladas || ""}
                       onChange={(e) => {
                         setEditedCaminhao({ ...editedCaminhao, capacidade_toneladas: parseFloat(e.target.value) || 0 });
-                        setFormErrors(prev => { const n = { ...prev }; delete n.capacidade_toneladas; return n; });
+                        clearFormError("capacidade_toneladas");
                       }}
+                      onFocus={() => clearFormError("capacidade_toneladas")}
+                      className={fieldErrorClass(formErrors.capacidade_toneladas)}
                     />
                     <span className="text-sm font-semibold text-muted-foreground whitespace-nowrap">ton</span>
                   </div>
-                  {formErrors.capacidade_toneladas && (
-                    <p className="text-sm text-red-500">{formErrors.capacidade_toneladas}</p>
-                  )}
+                  <FieldError message={formErrors.capacidade_toneladas} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="kmAtual" className="flex items-center gap-2">
@@ -1277,7 +1334,7 @@ export default function Frota() {
                 </div>
               </div>
               
-              {/* Tipo de Combustível */}
+              {/* Tipo de Combustível e Tipo de Proprietário */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="tipoCombustivel" className="flex items-center gap-2">
@@ -1298,6 +1355,28 @@ export default function Frota() {
                       <SelectItem value="GASOLINA">Gasolina</SelectItem>
                       <SelectItem value="ETANOL">Etanol</SelectItem>
                       <SelectItem value="GNV">GNV</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="proprietarioTipo" className="flex items-center gap-2">
+                    <Info className="h-4 w-4 text-primary" />
+                    Tipo de Proprietário
+                  </Label>
+                  <Select
+                    value={editedCaminhao.proprietario_tipo || "PROPRIO"}
+                    onValueChange={(value: "PROPRIO" | "TERCEIRO" | "AGREGADO") =>
+                      setEditedCaminhao({ ...editedCaminhao, proprietario_tipo: value })
+                    }
+                  >
+                    <SelectTrigger className={autoFilledFields.proprietario_tipo ? 'bg-blue-50 dark:bg-blue-900/40' : ''}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PROPRIO">Próprio</SelectItem>
+                      <SelectItem value="TERCEIRO">Terceiro</SelectItem>
+                      <SelectItem value="AGREGADO">Agregado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1427,20 +1506,19 @@ export default function Frota() {
                     </Label>
                     <Input
                       id="placa_carreta_ref"
-                      placeholder="DEF5678"
-                      className="font-mono"
-                      maxLength={20}
+                      placeholder="DEF-5678"
+                      className={fieldErrorClass(formErrors.placa_carreta)}
+                      maxLength={8}
                       value={editedCaminhao.placa_carreta || ""}
                       onChange={(e) => {
                         const formatted = formatPlateAsUserTypes(e.target.value);
                         setEditedCaminhao({ ...editedCaminhao, placa_carreta: formatted });
-                        setFormErrors(prev => { const n = { ...prev }; delete n.placa_carreta; return n; });
+                        clearFormError("placa_carreta");
                       }}
+                      onFocus={() => clearFormError("placa_carreta")}
                     />
                     <p className="text-xs text-muted-foreground">Placa do reboque/carreta se aplicável</p>
-                    {formErrors.placa_carreta && (
-                      <p className="text-sm text-red-500">{formErrors.placa_carreta}</p>
-                    )}
+                    <FieldError message={formErrors.placa_carreta} />
                   </div>
                 )}
                 <div className="space-y-2">
@@ -1469,27 +1547,6 @@ export default function Frota() {
                     value={editedCaminhao.registro_antt || ""}
                     onChange={(e) => setEditedCaminhao({ ...editedCaminhao, registro_antt: e.target.value })}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="proprietarioTipo" className="flex items-center gap-2">
-                    <Info className="h-4 w-4 text-primary" />
-                    Tipo de Proprietário
-                  </Label>
-                  <Select
-                    value={editedCaminhao.proprietario_tipo || "PROPRIO"}
-                    onValueChange={(value: "PROPRIO" | "TERCEIRO" | "AGREGADO") => 
-                      setEditedCaminhao({ ...editedCaminhao, proprietario_tipo: value })
-                    }
-                  >
-                    <SelectTrigger className={autoFilledFields.proprietario_tipo ? 'bg-blue-50 dark:bg-blue-900/40' : ''}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PROPRIO">Próprio</SelectItem>
-                      <SelectItem value="TERCEIRO">Terceiro</SelectItem>
-                      <SelectItem value="AGREGADO">Agregado</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
               
@@ -1591,7 +1648,10 @@ export default function Frota() {
 
           <DialogFooter className="gap-2 flex flex-col sm:flex-row">
             <ModalSubmitFooter
-              onCancel={() => setIsModalOpen(false)}
+              onCancel={() => {
+                setIsModalOpen(false);
+                resetFormErrors();
+              }}
               onSubmit={handleSave}
               isSubmitting={isSaving}
               submitLabel={isEditing ? "Salvar Alterações" : "Cadastrar Caminhão"}

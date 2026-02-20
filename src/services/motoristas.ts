@@ -2,12 +2,13 @@ import api from "@/api/axios";
 import { isAxiosError } from "axios";
 import type { ApiResponse, Motorista } from "@/types";
 
-export async function listarMotoristas(): Promise<ApiResponse<Motorista[]>> {
+export async function listarMotoristas(params?: { page?: number; limit?: number }): Promise<ApiResponse<Motorista[]>> {
   try {
-    const res = await api.get("/motoristas");
+    const { page = 1, limit = 50 } = params ?? {};
+    const res = await api.get("/motoristas", { params: { page, limit } });
     // Backend retorna {success, message, data: [...]} 
     // Então res.data.data contém o array de motoristas
-    return { success: true, data: res.data.data || res.data };
+    return { success: true, data: res.data.data || res.data, meta: res.data.meta };
   } catch (err: any) {
     console.error("Erro em listarMotoristas:", err);
     const message = err?.response?.data?.message ?? err?.message ?? "Erro ao listar motoristas";

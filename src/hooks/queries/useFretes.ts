@@ -4,10 +4,12 @@ import type { CriarFretePayload } from "@/types";
 
 export const FRETES_QUERY_KEY = ["fretes"] as const;
 
-export function useFretes() {
+export function useFretes(params?: { page?: number; limit?: number }) {
+  const page = params?.page ?? 1;
+  const limit = params?.limit ?? 50;
   return useQuery({
-    queryKey: FRETES_QUERY_KEY,
-    queryFn: fretesService.listarFretes,
+    queryKey: [...FRETES_QUERY_KEY, page, limit],
+    queryFn: () => fretesService.listarFretes({ page, limit }),
     staleTime: 1000 * 60 * 2,
   });
 }

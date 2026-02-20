@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -8,6 +8,8 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatCard } from "@/components/shared/StatCard";
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Pagination,
   PaginationContent,
@@ -28,7 +29,7 @@ import {
 import custosService from "@/services/custos";
 import * as fretesService from "@/services/fretes";
 import { usePeriodoFilter } from "@/hooks/usePeriodoFilter";
-import type { Custo, CriarCustoPayload } from "@/types";
+import type { ApiResponse, Custo, CriarCustoPayload, Frete } from "@/types";
 import { toast } from "sonner";
 import {
   Select,
@@ -64,6 +65,7 @@ import { ptBR } from "date-fns/locale";
 import { ITEMS_PER_PAGE } from "@/lib/pagination";
 import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { useRefreshData } from "@/hooks/useRefreshData";
+import { useShake } from "@/hooks/useShake";
 
 const tipoConfig = {
   combustivel: { label: "Combustível", icon: Fuel, color: "text-warning" },
@@ -77,15 +79,15 @@ export default function Custos() {
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
   // Query para listar custos
-  const { data: custosResponse, isLoading } = useQuery({
+  const { data: custosResponse, isLoading } = useQuery<ApiResponse<Custo[]>>({
     queryKey: ["custos"],
-    queryFn: custosService.listarCustos,
+    queryFn: () => custosService.listarCustos(),
   });
 
   // Query para listar fretes (vinculo de custos)
-  const { data: fretesResponse } = useQuery({
+  const { data: fretesResponse } = useQuery<ApiResponse<Frete[]>>({
     queryKey: ["fretes"],
-    queryFn: fretesService.listarFretes,
+    queryFn: () => fretesService.listarFretes(),
   });
 
   const custos: Custo[] = custosResponse?.data || [];
@@ -200,6 +202,31 @@ export default function Custos() {
     litros: undefined,
     tipo_combustivel: undefined,
   });
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
+  const [comprovanteError, setComprovanteError] = useState("");
+  const comprovanteInputRef = useRef<HTMLInputElement | null>(null);
+  type FormErrors = {
+    frete_id: string;
+    tipo: string;
+    valor: string;
+    data: string;
+    litros: string;
+    tipo_combustivel: string;
+  };
+  const initialFormErrors: FormErrors = {
+    frete_id: "",
+    tipo: "",
+    valor: "",
+    data: "",
+    litros: "",
+    tipo_combustivel: "",
+  };
+  const [formErrors, setFormErrors] = useState<FormErrors>(initialFormErrors);
+  const resetFormErrors = () => setFormErrors(initialFormErrors);
+  const clearFormError = (field: keyof FormErrors) => {
+    setFormErrors((prev) => (prev[field] ? { ...prev, [field]: "" } : prev));
+  };
+  const { isShaking, triggerShake } = useShake(220);
 
   const handleRowClick = (custo: Custo) => {
     setSelectedCusto(custo);
@@ -208,6 +235,9 @@ export default function Custos() {
 
   const handleOpenNewModal = () => {
     setEditingCusto(null);
+    resetFormErrors();
+    setComprovanteFile(null);
+    setComprovanteError("");
     setFormData({
       frete_id: "",
       tipo: undefined,
@@ -235,6 +265,9 @@ export default function Custos() {
 
   const handleOpenEditModal = (custo: Custo) => {
     setEditingCusto(custo);
+    resetFormErrors();
+    setComprovanteFile(null);
+    setComprovanteError("");
     setFormData({
       frete_id: custo.frete_id,
       tipo: custo.tipo,
@@ -251,14 +284,28 @@ export default function Custos() {
 
   const handleSave = () => {
     if (isSaving) return;
+    const nextErrors: FormErrors = {
+      frete_id: "",
+      tipo: "",
+      valor: "",
+      data: "",
+      litros: "",
+      tipo_combustivel: "",
+    };
 
-    if (!formData.frete_id || !formData.tipo || !formData.valor || !formData.data) {
-      toast.error("Preencha todos os campos obrigatorios!");
-      return;
+    if (!formData.frete_id) nextErrors.frete_id = "Selecione o frete.";
+    if (!formData.tipo) nextErrors.tipo = "Selecione o tipo de custo.";
+    if (!formData.valor) nextErrors.valor = "Informe o valor.";
+    if (!formData.data) nextErrors.data = "Selecione a data.";
+
+    if (formData.tipo === "combustivel") {
+      if (!formData.litros) nextErrors.litros = "Informe os litros abastecidos.";
+      if (!formData.tipo_combustivel) nextErrors.tipo_combustivel = "Selecione o tipo de combustivel.";
     }
 
-    if (formData.tipo === "combustivel" && (!formData.litros || !formData.tipo_combustivel)) {
-      toast.error("Para combustivel, informe litros e tipo de combustivel.");
+    if (Object.values(nextErrors).some(Boolean)) {
+      setFormErrors(nextErrors);
+      triggerShake();
       return;
     }
 
@@ -272,11 +319,11 @@ export default function Custos() {
     const payload: CriarCustoPayload = {
       frete_id: formData.frete_id,
       tipo: formData.tipo,
-      descricao: descricaoAuto,
+      descricao: descricaoAuto.trim().toUpperCase(),
       valor: Number(formData.valor),
       data: formData.data,
       comprovante: !!formData.comprovante,
-      observacoes: formData.observacoes || undefined,
+      observacoes: formData.observacoes ? formData.observacoes.trim().toUpperCase() : undefined,
       litros: formData.tipo === "combustivel" ? Number(formData.litros) : undefined,
       tipo_combustivel: formData.tipo === "combustivel" ? formData.tipo_combustivel : undefined,
     };
@@ -299,12 +346,16 @@ export default function Custos() {
 
   const parseCustoDate = (value: string) => {
     if (!value) return null;
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [ano, mes, dia] = value.split("-");
+      return new Date(Number(ano), Number(mes) - 1, Number(dia));
+    }
     if (value.includes("/")) {
       const [dia, mes, ano] = value.split("/");
       return new Date(Number(ano), Number(mes) - 1, Number(dia));
     }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
     return null;
   };
 
@@ -1397,8 +1448,15 @@ export default function Custos() {
       )}
 
       {/* New Cost Modal */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => !isSaving && setIsModalOpen(open)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (isSaving) return;
+          setIsModalOpen(open);
+          resetFormErrors();
+        }}
+      >
+        <DialogContent className={`max-w-2xl max-h-[90vh] overflow-y-auto p-6 ${isShaking ? "animate-shake" : ""}`}>
           <DialogHeader>
             <DialogTitle>{editingCusto ? "Editar Custo" : "Novo Custo"}</DialogTitle>
           </DialogHeader>
@@ -1407,9 +1465,15 @@ export default function Custos() {
               <Label htmlFor="frete_id">Frete *</Label>
               <Select
                 value={formData.frete_id ?? 'none'}
-                onValueChange={(value) => setFormData({ ...formData, frete_id: value === 'none' ? null : value })}
+                onValueChange={(value) => {
+                  setFormData({ ...formData, frete_id: value === 'none' ? null : value });
+                  clearFormError("frete_id");
+                }}
+                onOpenChange={(open) => {
+                  if (open) clearFormError("frete_id");
+                }}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn(fieldErrorClass(formErrors.frete_id))}>
                   <SelectValue placeholder="Selecione o frete" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1426,16 +1490,25 @@ export default function Custos() {
                   )}
                 </SelectContent>
               </Select>
+              <FieldError message={formErrors.frete_id} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="tipo">Tipo de Custo *</Label>
               <Select
                 value={formData.tipo || ""}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, tipo: value as Custo["tipo"] })
-                }
+                onValueChange={(value) => {
+                  setFormData({ ...formData, tipo: value as Custo["tipo"] });
+                  clearFormError("tipo");
+                  if (value !== "combustivel") {
+                    clearFormError("litros");
+                    clearFormError("tipo_combustivel");
+                  }
+                }}
+                onOpenChange={(open) => {
+                  if (open) clearFormError("tipo");
+                }}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn(fieldErrorClass(formErrors.tipo))}>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1445,6 +1518,7 @@ export default function Custos() {
                   <SelectItem value="outros">Outros</SelectItem>
                 </SelectContent>
               </Select>
+              <FieldError message={formErrors.tipo} />
             </div>
             
             {/* Campos específicos para Combustível */}
@@ -1464,19 +1538,29 @@ export default function Custos() {
                         type="number" 
                         placeholder="Ex: 150" 
                         value={formData.litros ?? ""}
-                        onChange={(e) => setFormData({ ...formData, litros: Number(e.target.value) })}
+                        onChange={(e) => {
+                          setFormData({ ...formData, litros: Number(e.target.value) });
+                          clearFormError("litros");
+                        }}
+                        onFocus={() => clearFormError("litros")}
+                        className={cn(fieldErrorClass(formErrors.litros))}
                         step="0.01"
                       />
+                      <FieldError message={formErrors.litros} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="tipo_combustivel">Tipo de Combustível *</Label>
                       <Select
                         value={formData.tipo_combustivel || ""}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, tipo_combustivel: value as Custo["tipo_combustivel"] })
-                        }
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, tipo_combustivel: value as Custo["tipo_combustivel"] });
+                          clearFormError("tipo_combustivel");
+                        }}
+                        onOpenChange={(open) => {
+                          if (open) clearFormError("tipo_combustivel");
+                        }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={cn(fieldErrorClass(formErrors.tipo_combustivel))}>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1486,6 +1570,7 @@ export default function Custos() {
                           <SelectItem value="gnv">GNV</SelectItem>
                         </SelectContent>
                       </Select>
+                      <FieldError message={formErrors.tipo_combustivel} />
                     </div>
                   </div>
                   
@@ -1525,6 +1610,7 @@ export default function Custos() {
                     const reais = cents / 100;
                     setFormData({ ...formData, valor: reais });
                     setValorInput(formatCurrency(reais));
+                    clearFormError("valor");
                   }}
                   onBlur={() => {
                     // ensure formatted
@@ -1539,29 +1625,27 @@ export default function Custos() {
                     } else {
                       setValorInput("");
                     }
+                    clearFormError("valor");
                   }}
+                  className={cn(fieldErrorClass(formErrors.valor))}
                 />
+                <FieldError message={formErrors.valor} />
               </div>
               <div className="space-y-2">
                 <Label className="">Data *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !formData.data && "text-muted-foreground") }>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formData.data ? format(parseCustoDate(formData.data) ?? new Date(), "dd/MM/yyyy") : "Selecione"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <div className="p-3">
-                      <Calendar
-                        mode="single"
-                        selected={parseCustoDate(formData.data)}
-                        onSelect={(d) => setFormData({ ...formData, data: d ? format(d, "yyyy-MM-dd") : "" })}
-                        className="pointer-events-auto"
-                      />
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  value={parseCustoDate(formData.data) ?? undefined}
+                  onChange={(date) => {
+                    if (!date) return;
+                    setFormData({ ...formData, data: format(date, "yyyy-MM-dd") });
+                    clearFormError("data");
+                  }}
+                  onOpenChange={(open) => {
+                    if (open) clearFormError("data");
+                  }}
+                  buttonClassName={cn(fieldErrorClass(formErrors.data))}
+                />
+                <FieldError message={formErrors.data} />
               </div>
             </div>
             <div className="space-y-2">
@@ -1575,26 +1659,91 @@ export default function Custos() {
             </div>
             <div className="space-y-2">
               <Label>Comprovante</Label>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="comprovante"
-                  checked={!!formData.comprovante}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, comprovante: checked === true })
-                  }
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  ref={comprovanteInputRef}
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    if (!file) {
+                      setComprovanteFile(null);
+                      setComprovanteError("");
+                      setFormData({ ...formData, comprovante: false });
+                      return;
+                    }
+
+                    const maxBytes = 5 * 1024 * 1024;
+                    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+                    if (!allowedTypes.includes(file.type)) {
+                      toast.error("Formato inválido", {
+                        description: "Envie PDF ou imagem (JPG, PNG, WEBP).",
+                      });
+                      setComprovanteFile(null);
+                      setComprovanteError("Formato inválido. Use PDF ou imagem.");
+                      setFormData({ ...formData, comprovante: false });
+                      if (comprovanteInputRef.current) {
+                        comprovanteInputRef.current.value = "";
+                      }
+                      return;
+                    }
+
+                    if (file.size > maxBytes) {
+                      toast.error("Arquivo muito grande", {
+                        description: "Tamanho máximo: 5 MB.",
+                      });
+                      setComprovanteFile(null);
+                      setComprovanteError("Arquivo acima de 5 MB.");
+                      setFormData({ ...formData, comprovante: false });
+                      if (comprovanteInputRef.current) {
+                        comprovanteInputRef.current.value = "";
+                      }
+                      return;
+                    }
+
+                    setComprovanteFile(file);
+                    setComprovanteError("");
+                    setFormData({ ...formData, comprovante: true });
+                  }}
                 />
-                <Label htmlFor="comprovante" className="font-normal cursor-pointer">
-                  {formData.comprovante ? (
-                    <Badge variant="success" className="text-xs">
-                      <FileCheck className="h-3 w-3 mr-1 inline" /> Anexado
-                    </Badge>
-                  ) : (
-                    <Badge variant="neutral" className="text-xs">
-                      Comprovante Pendente
-                    </Badge>
-                  )}
-                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => comprovanteInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  Anexar comprovante
+                </Button>
+                {comprovanteFile ? (
+                  <Badge variant="success" className="text-xs">
+                    <FileCheck className="h-3 w-3 mr-1 inline" /> {comprovanteFile.name}
+                  </Badge>
+                ) : (
+                  <Badge variant="neutral" className="text-xs">
+                    Comprovante Pendente
+                  </Badge>
+                )}
+                {comprovanteFile && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-xs"
+                    onClick={() => {
+                      setComprovanteFile(null);
+                      setComprovanteError("");
+                      setFormData({ ...formData, comprovante: false });
+                      if (comprovanteInputRef.current) {
+                        comprovanteInputRef.current.value = "";
+                      }
+                    }}
+                  >
+                    Remover
+                  </Button>
+                )}
               </div>
+              <FieldError message={comprovanteError} />
             </div>
           </div>
           <DialogFooter>
@@ -1602,6 +1751,7 @@ export default function Custos() {
               onCancel={() => {
                 setIsModalOpen(false);
                 setEditingCusto(null);
+                resetFormErrors();
               }}
               onSubmit={handleSave}
               isSubmitting={isSaving}

@@ -4,10 +4,12 @@ import type { ApiResponse, Motorista } from "@/types";
 
 export const MOTORISTAS_QUERY_KEY = ["motoristas"] as const;
 
-export function useMotoristas() {
+export function useMotoristas(params?: { page?: number; limit?: number }) {
+  const page = params?.page ?? 1;
+  const limit = params?.limit ?? 50;
   return useQuery({
-    queryKey: MOTORISTAS_QUERY_KEY,
-    queryFn: motoristasService.listarMotoristas,
+    queryKey: [...MOTORISTAS_QUERY_KEY, page, limit],
+    queryFn: () => motoristasService.listarMotoristas({ page, limit }),
     staleTime: 1000 * 60 * 5,
   });
 }

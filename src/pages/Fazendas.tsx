@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { sortFazendasPorNome } from "@/lib/sortHelpers";
 import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { useRefreshData } from "@/hooks/useRefreshData";
+import { useShake } from "@/hooks/useShake";
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -57,6 +58,7 @@ import { ITEMS_PER_PAGE } from "@/lib/pagination";
 import { useAtualizarFazenda, useCriarFazenda, useDeletarFazenda, useFazendas } from "@/hooks/queries/useFazendas";
 import { diffObjects } from "@/lib/diff";
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
 
 export default function Fazendas() {
   // Gerar opções de safra dinamicamente (últimos 5 anos e próximos 3)
@@ -131,8 +133,31 @@ export default function Fazendas() {
     safra: "2024/2025",
     colheita_finalizada: false,
   });
+  type FormErrors = {
+    fazenda: string;
+    estado: string;
+    proprietario: string;
+    mercadoria: string;
+    safra: string;
+    preco_por_tonelada: string;
+  };
+  const initialFormErrors: FormErrors = {
+    fazenda: "",
+    estado: "",
+    proprietario: "",
+    mercadoria: "",
+    safra: "",
+    preco_por_tonelada: "",
+  };
+  const [formErrors, setFormErrors] = useState<FormErrors>(initialFormErrors);
+  const resetFormErrors = () => setFormErrors(initialFormErrors);
+  const clearFormError = (field: keyof FormErrors) => {
+    setFormErrors((prev) => (prev[field] ? { ...prev, [field]: "" } : prev));
+  };
+  const { isShaking, triggerShake } = useShake(220);
 
   const handleOpenNewModal = () => {
+    resetFormErrors();
     setNewProducao({
       fazenda: "",
       estado: "SP",
@@ -158,6 +183,7 @@ export default function Fazendas() {
   const navigate = useNavigate();
 
   const handleOpenEditModal = (producao: Fazenda) => {
+    resetFormErrors();
     setNewProducao(producao);
     setIsEditing(true);
     setSelectedProducao(null);
@@ -188,26 +214,43 @@ export default function Fazendas() {
     const precoPorTonelada = toNumber(newProducao.preco_por_tonelada);
     const pesoMedioSaca = toNumber(newProducao.peso_medio_saca);
 
-    if (!fazenda || !estado || !proprietario || !mercadoria || !safra) {
-      toast.error("Preencha todos os campos obrigatórios: fazenda, estado, proprietário, mercadoria e safra.");
+    const nextErrors: FormErrors = {
+      fazenda: "",
+      estado: "",
+      proprietario: "",
+      mercadoria: "",
+      safra: "",
+      preco_por_tonelada: "",
+    };
+    if (!fazenda) nextErrors.fazenda = "Informe o nome da fazenda.";
+    if (!estado) nextErrors.estado = "Selecione o estado.";
+    if (!proprietario) nextErrors.proprietario = "Informe o proprietario.";
+    if (!mercadoria) nextErrors.mercadoria = "Informe a mercadoria.";
+    if (!safra) nextErrors.safra = "Informe a safra.";
+    if (precoPorTonelada <= 0) nextErrors.preco_por_tonelada = "Informe um preco por tonelada valido.";
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setFormErrors(nextErrors);
+      triggerShake();
       return;
     }
 
-    if (precoPorTonelada <= 0) {
-      toast.error("Informe um preço por tonelada maior que zero.");
-      return;
-    }
+    const toUpper = (value: string) => value.trim().toUpperCase();
+    const toUpperOrUndefined = (value?: string | null) => {
+      const trimmed = (value ?? "").trim();
+      return trimmed ? trimmed.toUpperCase() : undefined;
+    };
 
     if (isEditing && newProducao.id) {
       const payloadForUpdate: Partial<CriarFazendaPayload> = {
-        fazenda,
+        fazenda: toUpper(fazenda),
         estado,
-        proprietario,
-        mercadoria,
-        variedade: variedade || undefined,
+        proprietario: toUpper(proprietario),
+        mercadoria: toUpper(mercadoria),
+        variedade: toUpperOrUndefined(variedade),
         preco_por_tonelada: precoPorTonelada,
         peso_medio_saca: pesoMedioSaca > 0 ? pesoMedioSaca : undefined,
-        safra,
+        safra: toUpper(safra),
         total_sacas_carregadas: newProducao.total_sacas_carregadas,
         total_toneladas: newProducao.total_toneladas,
         faturamento_total: newProducao.faturamento_total,
@@ -246,14 +289,14 @@ export default function Fazendas() {
       }
     } else {
       const payload: CriarFazendaPayload = {
-        fazenda,
+        fazenda: toUpper(fazenda),
         estado,
-        proprietario,
-        mercadoria,
-        variedade: variedade || undefined,
+        proprietario: toUpper(proprietario),
+        mercadoria: toUpper(mercadoria),
+        variedade: toUpperOrUndefined(variedade),
         preco_por_tonelada: precoPorTonelada,
         peso_medio_saca: pesoMedioSaca > 0 ? pesoMedioSaca : undefined,
-        safra,
+        safra: toUpper(safra),
       };
 
       setIsSaving(true);
@@ -1137,8 +1180,15 @@ export default function Fazendas() {
       )}
 
       {/* Modal de Nova/Editar Fazenda */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => !isSaving && setIsModalOpen(open)}>
-        <DialogContent className="max-w-2xl">
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (isSaving) return;
+          setIsModalOpen(open);
+          resetFormErrors();
+        }}
+      >
+        <DialogContent className={`max-w-2xl ${isShaking ? "animate-shake" : ""}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               {isEditing ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
@@ -1161,17 +1211,29 @@ export default function Fazendas() {
                     id="fazenda"
                     placeholder="Ex: Fazenda Santa Esperança"
                     value={newProducao.fazenda}
-                    onChange={(e) => setNewProducao({ ...newProducao, fazenda: e.target.value })}
+                    onChange={(e) => {
+                      setNewProducao({ ...newProducao, fazenda: e.target.value });
+                      clearFormError("fazenda");
+                    }}
+                    onFocus={() => clearFormError("fazenda")}
+                    className={fieldErrorClass(formErrors.fazenda)}
                   />
+                  <FieldError message={formErrors.fazenda} />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="estado">Estado *</Label>
                   <Select
                     value={newProducao.estado || "SP"}
-                    onValueChange={(value: "SP" | "MS" | "MT") => setNewProducao({ ...newProducao, estado: value })}
+                    onValueChange={(value: "SP" | "MS" | "MT") => {
+                      setNewProducao({ ...newProducao, estado: value });
+                      clearFormError("estado");
+                    }}
+                    onOpenChange={(open) => {
+                      if (open) clearFormError("estado");
+                    }}
                   >
-                    <SelectTrigger id="estado">
+                    <SelectTrigger id="estado" className={fieldErrorClass(formErrors.estado)}>
                       <SelectValue placeholder="Selecione o estado" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1180,6 +1242,7 @@ export default function Fazendas() {
                       <SelectItem value="MT">MT</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.estado} />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
@@ -1188,8 +1251,14 @@ export default function Fazendas() {
                     id="proprietario"
                     placeholder="Ex: João Silva"
                     value={newProducao.proprietario}
-                    onChange={(e) => setNewProducao({ ...newProducao, proprietario: e.target.value })}
+                    onChange={(e) => {
+                      setNewProducao({ ...newProducao, proprietario: e.target.value });
+                      clearFormError("proprietario");
+                    }}
+                    onFocus={() => clearFormError("proprietario")}
+                    className={fieldErrorClass(formErrors.proprietario)}
                   />
+                  <FieldError message={formErrors.proprietario} />
                 </div>
                 
               </div>
@@ -1207,9 +1276,15 @@ export default function Fazendas() {
                   <Label htmlFor="mercadoria">Tipo de Mercadoria *</Label>
                   <Select
                     value={newProducao.mercadoria}
-                    onValueChange={(value) => setNewProducao({ ...newProducao, mercadoria: value })}
+                    onValueChange={(value) => {
+                      setNewProducao({ ...newProducao, mercadoria: value });
+                      clearFormError("mercadoria");
+                    }}
+                    onOpenChange={(open) => {
+                      if (open) clearFormError("mercadoria");
+                    }}
                   >
-                    <SelectTrigger id="mercadoria">
+                    <SelectTrigger id="mercadoria" className={fieldErrorClass(formErrors.mercadoria)}>
                       <SelectValue placeholder="Selecione a mercadoria" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1217,6 +1292,7 @@ export default function Fazendas() {
                       <SelectItem value="SEMENTE AM CASCA VERDE">SEMENTE AM CASCA VERDE</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.mercadoria} />
                 </div>
 
                 <div className="space-y-2">
@@ -1239,9 +1315,15 @@ export default function Fazendas() {
                   <Label htmlFor="safra">Safra *</Label>
                   <Select
                     value={newProducao.safra}
-                    onValueChange={(value) => setNewProducao({ ...newProducao, safra: value })}
+                    onValueChange={(value) => {
+                      setNewProducao({ ...newProducao, safra: value });
+                      clearFormError("safra");
+                    }}
+                    onOpenChange={(open) => {
+                      if (open) clearFormError("safra");
+                    }}
                   >
-                    <SelectTrigger id="safra">
+                    <SelectTrigger id="safra" className={fieldErrorClass(formErrors.safra)}>
                       <SelectValue placeholder="Selecione a safra" />
                     </SelectTrigger>
                     <SelectContent className="max-h-64 overflow-y-auto">
@@ -1252,6 +1334,7 @@ export default function Fazendas() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FieldError message={formErrors.safra} />
                 </div>
 
                 <div className="space-y-2">
@@ -1288,15 +1371,18 @@ export default function Fazendas() {
                     <Input
                       id="preco_por_tonelada"
                       placeholder="0,00"
-                      className="pl-10"
+                      className={`pl-10 ${fieldErrorClass(formErrors.preco_por_tonelada)}`}
                       value={newProducao.preco_por_tonelada > 0 ? formatarInputMoeda(String(newProducao.preco_por_tonelada * 100)) : ''}
                       onChange={(e) => {
                         const valorFormatado = formatarInputMoeda(e.target.value);
                         const valorNumerico = desformatarMoeda(valorFormatado);
                         setNewProducao({ ...newProducao, preco_por_tonelada: valorNumerico });
+                        clearFormError("preco_por_tonelada");
                       }}
+                      onFocus={() => clearFormError("preco_por_tonelada")}
                     />
                   </div>
+                  <FieldError message={formErrors.preco_por_tonelada} />
                 </div>
 
                 {newProducao.preco_por_tonelada > 0 && newProducao.peso_medio_saca > 0 && (
@@ -1360,7 +1446,10 @@ export default function Fazendas() {
 
           <DialogFooter className="gap-2">
             <ModalSubmitFooter
-              onCancel={() => setIsModalOpen(false)}
+              onCancel={() => {
+                setIsModalOpen(false);
+                resetFormErrors();
+              }}
               onSubmit={handleSave}
               isSubmitting={isSaving}
               submitLabel={isEditing ? "Salvar Alterações" : "Cadastrar Fazenda"}

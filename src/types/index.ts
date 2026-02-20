@@ -108,6 +108,7 @@ export interface Frete {
   resultado: number;
   pagamento_id?: string | null;
   ticket?: string | null;
+  numero_nota_fiscal?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -133,6 +134,7 @@ export interface CriarFretePayload {
   custos?: number;
   resultado?: number;
   ticket?: string;
+  numero_nota_fiscal?: string;
   pagamento_id?: string;
 }
 
@@ -140,6 +142,12 @@ export interface ApiResponse<T = any> {
   success: boolean;
   data: T | null;
   message?: string;
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+    totalPages?: number;
+  };
   // HTTP status code when available (useful for service-to-UI mapping)
   status?: number;
 }

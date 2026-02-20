@@ -6,6 +6,7 @@ interface BackendFretesResponse {
   success: boolean;
   message: string;
   data: Frete[];
+  meta?: ApiResponse["meta"];
 }
 
 interface BackendFreteResponse {
@@ -14,12 +15,15 @@ interface BackendFreteResponse {
   data: { id: string };
 }
 
-export async function listarFretes(): Promise<ApiResponse<Frete[]>> {
+export async function listarFretes(params?: { page?: number; limit?: number }): Promise<ApiResponse<Frete[]>> {
   try {
-    const res = await api.get<BackendFretesResponse>("/fretes");
+    const { page = 1, limit = 50 } = params ?? {};
+    const res = await api.get<BackendFretesResponse>("/fretes", {
+      params: { page, limit },
+    });
     
     if (res.data.success && res.data.data) {
-      return { success: true, data: res.data.data, status: res.status };
+      return { success: true, data: res.data.data, meta: res.data.meta, status: res.status };
     }
 
     return { success: false, data: null, message: "Resposta inválida do servidor" };

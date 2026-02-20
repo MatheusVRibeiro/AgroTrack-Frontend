@@ -10,6 +10,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { SESSION_EXPIRED_MESSAGE } from "@/auth/session";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
+import { cn } from "@/lib/utils";
+import { useShake } from "@/hooks/useShake";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -18,6 +21,11 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [formErrors, setFormErrors] = useState({ email: "", password: "" });
+  const clearFormError = (field: "email" | "password") => {
+    setFormErrors((prev) => (prev[field] ? { ...prev, [field]: "" } : prev));
+  };
+  const { isShaking, triggerShake } = useShake(220);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -49,18 +57,19 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setFormErrors({ email: "", password: "" });
     // Client-side validation
     const normalizedEmail = String(email ?? "").trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(normalizedEmail)) {
-      toast.error("Email inválido", { description: "Informe um email com formato válido." });
-      setError("Email inválido");
+      setFormErrors({ email: "Informe um email com formato valido.", password: "" });
+      triggerShake();
       return;
     }
 
     if (String(password ?? "").length < 6) {
-      toast.error("Senha muito curta", { description: "A senha deve ter pelo menos 6 caracteres." });
-      setError("Senha muito curta");
+      setFormErrors({ email: "", password: "A senha deve ter pelo menos 6 caracteres." });
+      triggerShake();
       return;
     }
 
@@ -100,7 +109,7 @@ export default function Login() {
 
   return (
     <AuthLayout>
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className={cn("space-y-8", isShaking && "animate-shake")}>
         {/* Centered Header */}
         <div className="space-y-3 text-center">
           <div className="inline-block">
@@ -137,13 +146,21 @@ export default function Login() {
                 type="email"
                 placeholder="seu@email.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-12 h-12 text-base rounded-lg transition-all focus:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  clearFormError("email");
+                }}
+                onFocus={() => clearFormError("email")}
+                className={cn(
+                  "pl-12 h-12 text-base rounded-lg transition-all focus:border-primary focus-visible:ring-0 focus-visible:ring-offset-0",
+                  fieldErrorClass(formErrors.email)
+                )}
                 disabled={isSubmitting}
                 autoComplete="username"
                 required
               />
             </div>
+            <FieldError message={formErrors.email} />
           </div>
 
           {/* Password Field */}
@@ -159,8 +176,15 @@ export default function Login() {
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-12 pr-12 h-12 text-base rounded-lg transition-all focus:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  clearFormError("password");
+                }}
+                onFocus={() => clearFormError("password")}
+                className={cn(
+                  "pl-12 pr-12 h-12 text-base rounded-lg transition-all focus:border-primary focus-visible:ring-0 focus-visible:ring-offset-0",
+                  fieldErrorClass(formErrors.password)
+                )}
                 disabled={isSubmitting}
                 autoComplete="current-password"
                 required
@@ -180,6 +204,7 @@ export default function Login() {
                 )}
               </button>
             </div>
+            <FieldError message={formErrors.password} />
           </div>
 
           {/* Remember Me & Forgot Password */}

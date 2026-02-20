@@ -181,7 +181,7 @@ export const formatarDataBrasileira = (dataISO: string | undefined): string => {
 };
 
 /**
- * Converte data de formato brasileiro (DD/MM/YYYY) 
+ * Converta data de formato brasileiro (DD/MM/YYYY) 
  * para formato ISO (YYYY-MM-DD)
  * @param dataBrasileira Data em formato DD/MM/YYYY
  * @returns Data em formato YYYY-MM-DD
@@ -201,4 +201,41 @@ export const converterDataBrasileira = (dataBrasileira: string): string => {
   
   // Retorna em formato YYYY-MM-DD
   return `${ano}-${mes}-${dia}`;
+};
+
+/**
+ * Formata toneladas em tempo real (enquanto digita)
+ * Ex: "48200" vira "48.200 kg" (exibição para referência, mas mantém valor numérico)
+ * @param valor String digitada pelo usuário (apenas números)
+ * @returns String formatada com separador de milhar e "kg"
+ */
+export const formatarToneladas = (valor: string): string => {
+  const apenasNumeros = valor.replace(/\D/g, '');
+  if (!apenasNumeros) return '';
+  
+  // Formata como número com separador de milhar
+  return Number(apenasNumeros).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+};
+
+/**
+ * Formata valor da tonelada com vírgula decimal
+ * Ex: "150" vira "150,00"
+ * @param valor String digitada pelo usuário
+ * @returns String formatada com vírgula decimal
+ */
+export const formatarValorPorTonelada = (valor: string): string => {
+  const apenasNumeros = valor.replace(/\D/g, '');
+  if (!apenasNumeros) return '';
+  
+  // Converte para número considerando centavos se houver
+  const valorNumerico = Number(apenasNumeros) / 100;
+  
+  // Formata com 2 casas decimais
+  return valorNumerico.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };

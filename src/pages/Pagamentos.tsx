@@ -1,3 +1,4 @@
+import { useShake } from "@/hooks/useShake";
 import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +8,7 @@ import { PeriodoFilter } from "@/components/shared/PeriodoFilter";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -46,8 +48,6 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 // Icons
 import {
-  Lock,
-  Unlock,
   FileText,
   Clock,
   TrendingDown,
@@ -61,6 +61,7 @@ import {
   Calendar,
   Paperclip,
   Download,
+  Eye,
   AlertCircle,
   X,
   Save,
@@ -72,8 +73,6 @@ import { ptBR } from "date-fns/locale";
 import { cn, shortName } from "@/lib/utils";
 import { toast } from "sonner";
 import { ITEMS_PER_PAGE } from "@/lib/pagination";
-import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
-import { useRefreshData } from "@/hooks/useRefreshData";
 
 // PDF helpers
 import jsPDF from "jspdf";
@@ -138,26 +137,25 @@ const statusConfig = {
 
 export default function Pagamentos() {
   const queryClient = useQueryClient();
-  const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
   const { data: pagamentosResponse, isLoading: isLoadingPagamentos } = useQuery<ApiResponse<Pagamento[]>>({
     queryKey: ["pagamentos"],
-    queryFn: pagamentosService.listarPagamentos,
+    queryFn: () => pagamentosService.listarPagamentos(),
   });
 
   const { data: motoristasResponse } = useQuery<ApiResponse<Motorista[]>>({
     queryKey: ["motoristas"],
-    queryFn: motoristasService.listarMotoristas,
+    queryFn: () => motoristasService.listarMotoristas(),
   });
 
   const { data: fretesResponse } = useQuery<ApiResponse<Frete[]>>({
     queryKey: ["fretes"],
-    queryFn: fretesService.listarFretes,
+    queryFn: () => fretesService.listarFretes(),
   });
 
   const { data: custosResponse } = useQuery<ApiResponse<any[]>>({
     queryKey: ["custos"],
-    queryFn: custosService.listarCustos,
+    queryFn: () => custosService.listarCustos(),
   });
 
   const pagamentosApi: Pagamento[] = pagamentosResponse?.data || [];
@@ -243,10 +241,68 @@ export default function Pagamentos() {
   const [editedPagamento, setEditedPagamento] = useState<Partial<PagamentoMotorista>>({});
   const [dataPagamentoSelected, setDataPagamentoSelected] = useState<Date | undefined>();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
+  const [selectedFileIsImage, setSelectedFileIsImage] = useState(false);
+  const [selectedFileIsPdf, setSelectedFileIsPdf] = useState(false);
+  const [comprovanteDialog, setComprovanteDialog] = useState<{
+    url: string;
+    nome: string;
+    isImage: boolean;
+    isPdf: boolean;
+  } | null>(null);
   const [selectedFretes, setSelectedFretes] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = ITEMS_PER_PAGE;
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const getComprovanteUrl = (url?: string) => {
+    if (!url) return "";
+    if (url.startsWith("http")) return url;
+    const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+    if (!base) return url;
+    const suffix = url.startsWith("/") ? url : `/${url}`;
+
+    if (suffix.startsWith("/uploads/")) {
+      try {
+        const baseUrl = new URL(base);
+        return `${baseUrl.origin}${suffix}`;
+      } catch {
+        // fallback padrão
+      }
+    }
+
+    return `${base}${suffix}`;
+  };
+
+  const parseFileType = (urlOrName?: string) => {
+    if (!urlOrName) return { isImage: false, isPdf: false };
+    const clean = urlOrName.split("?")[0].split("#")[0].toLowerCase();
+    return {
+      isImage: /\.(png|jpe?g|webp|gif|bmp|svg)$/.test(clean),
+      isPdf: /\.pdf$/.test(clean),
+    };
+  };
+
+  useEffect(() => {
+    return () => {
+      if (selectedFilePreview) {
+        URL.revokeObjectURL(selectedFilePreview);
+      }
+    };
+  }, [selectedFilePreview]);
+  type FormErrors = {
+    motoristaId: string;
+    fretes: string;
+  };
+  const initialFormErrors: FormErrors = {
+    motoristaId: "",
+    fretes: "",
+  };
+  const [formErrors, setFormErrors] = useState<FormErrors>(initialFormErrors);
+  const resetFormErrors = () => setFormErrors(initialFormErrors);
+  const clearFormError = (field: keyof FormErrors) => {
+    setFormErrors((prev) => (prev[field] ? { ...prev, [field]: "" } : prev));
+  };
+  const { isShaking, triggerShake } = useShake(220);
 
   const clearFilters = () => {
     setSearch("");
@@ -304,13 +360,13 @@ export default function Pagamentos() {
 
   // Query pendentes por motorista (carrega apenas fretes com pagamento_id == null)
   const motoristaIdForPendentes = editedPagamento?.motoristaId || null;
+  const usePendentesEndpoint = import.meta.env.VITE_USE_FRETES_PENDENTES_ENDPOINT === "true";
   const {
     data: fretesPendentesResponse,
-    isLoading: isLoadingFretesPendentes,
   } = useQuery<ApiResponse<Frete[]>>({
     queryKey: ["fretes", "pendentes", motoristaIdForPendentes],
     queryFn: () => fretesService.listarFretesPendentes(String(motoristaIdForPendentes)),
-    enabled: !!motoristaIdForPendentes,
+    enabled: usePendentesEndpoint && !!motoristaIdForPendentes,
     retry: 1,
   });
 
@@ -356,9 +412,6 @@ export default function Pagamentos() {
     [pagamentosApi]
   );
   
-  // Estados para Fechamento
-  const [mesesFechados, setMesesFechados] = useState<string[]>([]); // Meses que já foram fechados
-  
   // Dados históricos para comparação (simulado - mes anterior)
   const dadosMesAnterior = {
     periodo: "2025-12",
@@ -366,25 +419,60 @@ export default function Pagamentos() {
     totalMotoristas: 4,
   };
 
+  const uploadComprovanteIfNeeded = async (pagamentoId: string) => {
+    if (!selectedFile || !pagamentoId) return true;
+
+    const uploadResponse = await pagamentosService.uploadComprovante(String(pagamentoId), selectedFile);
+    if (!uploadResponse.success) {
+      toast.error(uploadResponse.message || "Pagamento salvo, mas falhou o upload do comprovante.");
+      return false;
+    }
+
+    return true;
+  };
+
   const createMutation = useMutation({
     mutationFn: pagamentosService.criarPagamento,
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       if (response.success) {
+        const createdId = String((response as any)?.data?.id || "");
+        await uploadComprovanteIfNeeded(createdId);
+
+        const guiaPayload = {
+          pagamentoId: createdId || `PG-${Date.now()}`,
+          motoristaId: String(editedPagamento.motoristaId || ""),
+          motoristaNome: String(
+            editedPagamento.motoristaNome ||
+              motoristas.find((m) => m.id === editedPagamento.motoristaId)?.nome ||
+              "Motorista"
+          ),
+          metodoPagamento: (editedPagamento.metodoPagamento || "pix") as "pix" | "transferencia_bancaria",
+          dataPagamento: String(editedPagamento.dataPagamento || new Date().toLocaleDateString("pt-BR")),
+          freteIds: selectedFretes.map((id) => String(id).trim()).filter(Boolean),
+          totalToneladas: Number(editedPagamento.toneladas || 0),
+          valorTonelada: Number(editedPagamento.valorUnitarioPorTonelada || 0),
+          valorTotal: Number(editedPagamento.valorTotal || 0),
+        };
+
         queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
         // refresh fretes pendentes for current motorista and full fretes list
-        if (motoristaIdForPendentes) {
+        if (usePendentesEndpoint && motoristaIdForPendentes) {
           queryClient.invalidateQueries({ queryKey: ["fretes", "pendentes", motoristaIdForPendentes] });
         }
         queryClient.invalidateQueries({ queryKey: ["fretes"] });
-        toast.success("Pagamento registrado com sucesso!");
+        toast.success("Pagamento registrado com sucesso! Deseja imprimir a guia agora?", {
+          duration: 9000,
+          action: {
+            label: "Imprimir PDF",
+            onClick: () => exportarGuiaPagamentoIndividual(guiaPayload),
+          },
+        });
         setIsModalOpen(false);
         setSelectedFretes([]);
         setIsSaving(false);
-        endRefresh();
       } else {
         toast.error(response.message || "Erro ao criar pagamento");
         setIsSaving(false);
-        endRefresh();
       }
     },
     onError: (error: any) => {
@@ -392,10 +480,9 @@ export default function Pagamentos() {
       const msg = isNetwork ? "Erro de rede, tente novamente" : (error?.response?.data?.message || error?.message || "Erro ao criar pagamento");
       toast.error(msg);
       setIsSaving(false);
-      endRefresh();
       // If backend indicates some fretes already paid, refresh pending list to sync UI
       if (String(msg).toLowerCase().includes("alguns fretes ja") || String(msg).toLowerCase().includes("alguns fretes já") || String(msg).toLowerCase().includes("já estão pagos")) {
-        if (motoristaIdForPendentes) {
+        if (usePendentesEndpoint && motoristaIdForPendentes) {
           queryClient.invalidateQueries({ queryKey: ["fretes", "pendentes", motoristaIdForPendentes] });
         }
       }
@@ -405,21 +492,20 @@ export default function Pagamentos() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: AtualizarPagamentoPayload }) =>
       pagamentosService.atualizarPagamento(id, data),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       if (response.success) {
+        await uploadComprovanteIfNeeded(String(editedPagamento.id || ""));
         queryClient.invalidateQueries({ queryKey: ["pagamentos"] });
-        if (motoristaIdForPendentes) {
+        if (usePendentesEndpoint && motoristaIdForPendentes) {
           queryClient.invalidateQueries({ queryKey: ["fretes", "pendentes", motoristaIdForPendentes] });
         }
         queryClient.invalidateQueries({ queryKey: ["fretes"] });
         toast.success("Pagamento atualizado com sucesso!");
         setIsModalOpen(false);
         setIsSaving(false);
-        endRefresh();
       } else {
         toast.error(response.message || "Erro ao atualizar pagamento");
         setIsSaving(false);
-        endRefresh();
       }
     },
     onError: (error: any) => {
@@ -427,9 +513,8 @@ export default function Pagamentos() {
       const msg = isNetwork ? "Erro de rede, tente novamente" : (error?.response?.data?.message || error?.message || "Erro ao atualizar pagamento");
       toast.error(msg);
       setIsSaving(false);
-      endRefresh();
       if (String(msg).toLowerCase().includes("alguns fretes ja") || String(msg).toLowerCase().includes("alguns fretes já") || String(msg).toLowerCase().includes("já estão pagos")) {
-        if (motoristaIdForPendentes) {
+        if (usePendentesEndpoint && motoristaIdForPendentes) {
           queryClient.invalidateQueries({ queryKey: ["fretes", "pendentes", motoristaIdForPendentes] });
         }
       }
@@ -437,6 +522,7 @@ export default function Pagamentos() {
   });
 
   const handleOpenNewModal = () => {
+    resetFormErrors();
     setEditedPagamento({
       motoristaId: "",
       motoristaNome: "",
@@ -452,14 +538,28 @@ export default function Pagamentos() {
       observacoes: "",
     });
     setSelectedFile(null);
+    if (selectedFilePreview) {
+      URL.revokeObjectURL(selectedFilePreview);
+    }
+    setSelectedFilePreview(null);
+    setSelectedFileIsImage(false);
+    setSelectedFileIsPdf(false);
     setSelectedFretes([]);
     setIsEditing(false);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (pagamento: PagamentoMotorista) => {
+    resetFormErrors();
     setEditedPagamento(pagamento);
     setSelectedFretes(pagamento.fretesSelecionados || []);
+    setSelectedFile(null);
+    if (selectedFilePreview) {
+      URL.revokeObjectURL(selectedFilePreview);
+    }
+    setSelectedFilePreview(null);
+    setSelectedFileIsImage(false);
+    setSelectedFileIsPdf(false);
     setIsEditing(true);
     setIsModalOpen(true);
   };
@@ -479,6 +579,8 @@ export default function Pagamentos() {
     // Handle clearing selection (placeholder uses 'none')
     if (motoristaId === "none" || motoristaId === "") {
       setSelectedFretes([]);
+      clearFormError("motoristaId");
+      clearFormError("fretes");
       setEditedPagamento({
         ...editedPagamento,
         motoristaId: "",
@@ -494,6 +596,8 @@ export default function Pagamentos() {
 
     const motorista = motoristas.find((m) => m.id === motoristaId);
     setSelectedFretes([]);
+    clearFormError("motoristaId");
+    clearFormError("fretes");
     setEditedPagamento({
       ...editedPagamento,
       motoristaId,
@@ -510,17 +614,19 @@ export default function Pagamentos() {
   const fretesNaoPagos = useMemo(() => {
     // prefer pendentes endpoint result; fallback to full list filter
     if (!editedPagamento?.motoristaId) return [];
-    if (fretesPendentesData && fretesPendentesData.length > 0) {
+    if (usePendentesEndpoint && fretesPendentesData && fretesPendentesData.length > 0) {
       return fretesPendentesData;
     }
     return fretesData.filter(
       (f) => f.motoristaId === editedPagamento.motoristaId && f.pagamentoId === null
     );
-  }, [editedPagamento?.motoristaId, fretesPendentesData, fretesData]);
+  }, [editedPagamento?.motoristaId, usePendentesEndpoint, fretesPendentesData, fretesData]);
 
   const handleToggleFrete = (freteId: string) => {
     // prefer pending fretes list, fallback to full fretesData
-    const frete = fretesPendentesData.find((f) => f.id === freteId) || fretesData.find((f) => f.id === freteId);
+    const frete =
+      (usePendentesEndpoint ? fretesPendentesData.find((f) => f.id === freteId) : undefined) ||
+      fretesData.find((f) => f.id === freteId);
     if (!frete) return;
 
     // If frete is already linked to a payment different from current edited payment, block selection
@@ -547,6 +653,9 @@ export default function Pagamentos() {
     const valorUnitario = toneladas > 0 ? valorTotal / toneladas : 0;
 
     setSelectedFretes(nextSelected);
+    if (nextSelected.length > 0) {
+      clearFormError("fretes");
+    }
     setEditedPagamento({
       ...editedPagamento,
       toneladas,
@@ -561,10 +670,23 @@ export default function Pagamentos() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error("Formato inválido", { description: "Use PDF ou imagem (JPG, PNG, WEBP)." });
+        return;
+      }
       if (file.size > 5 * 1024 * 1024) {
         toast.error("Arquivo muito grande (máximo 5MB)");
         return;
       }
+      if (selectedFilePreview) {
+        URL.revokeObjectURL(selectedFilePreview);
+      }
+      const isImage = file.type.startsWith("image/");
+      const isPdf = file.type === "application/pdf";
+      setSelectedFileIsImage(isImage);
+      setSelectedFileIsPdf(isPdf);
+      setSelectedFilePreview(URL.createObjectURL(file));
       setSelectedFile(file);
     }
   };
@@ -590,20 +712,167 @@ export default function Pagamentos() {
     return `${format(inicio, "dd/MM/yyyy")} - ${format(fim, "dd/MM/yyyy")}`;
   };
 
+  const getDadosPagamentoMotorista = (
+    motoristaId: string,
+    metodoFallback?: "pix" | "transferencia_bancaria"
+  ) => {
+    const motorista = motoristas.find((m) => String(m.id) === String(motoristaId));
+    const metodo = motorista?.tipoPagamento || metodoFallback || "pix";
+
+    if (metodo === "pix") {
+      const tipoChave = motorista?.chavePixTipo
+        ? String(motorista.chavePixTipo).toUpperCase()
+        : "N/I";
+      const chave = motorista?.chavePix || "Chave PIX não cadastrada";
+      return {
+        metodoLabel: "PIX",
+        dadosLabel: `Tipo: ${tipoChave} | Chave: ${chave}`,
+      };
+    }
+
+    const banco = motorista?.banco || "Banco não informado";
+    const agencia = motorista?.agencia || "N/I";
+    const conta = motorista?.conta || "N/I";
+    const tipoConta = motorista?.tipoConta === "corrente"
+      ? "Corrente"
+      : motorista?.tipoConta === "poupanca"
+      ? "Poupança"
+      : "N/I";
+
+    return {
+      metodoLabel: "Transferência Bancária",
+      dadosLabel: `Banco: ${banco} | Agência: ${agencia} | Conta: ${conta} | Tipo: ${tipoConta}`,
+    };
+  };
+
+  const exportarGuiaPagamentoIndividual = (params: {
+    pagamentoId: string;
+    motoristaId: string;
+    motoristaNome: string;
+    metodoPagamento: "pix" | "transferencia_bancaria";
+    dataPagamento: string;
+    freteIds: string[];
+    totalToneladas: number;
+    valorTonelada: number;
+    valorTotal: number;
+  }) => {
+    const doc = new jsPDF();
+    const dadosPagamento = getDadosPagamentoMotorista(params.motoristaId, params.metodoPagamento);
+    const fretesSelecionados = fretesData.filter((f) => params.freteIds.includes(f.id));
+
+    doc.setFillColor(22, 163, 74);
+    doc.rect(0, 0, 210, 34, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("GUIA DE PAGAMENTO", 105, 14, { align: "center" });
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Pagamento: ${params.pagamentoId}`, 105, 21, { align: "center" });
+    doc.text(`Data: ${params.dataPagamento}`, 105, 27, { align: "center" });
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("DADOS DO MOTORISTA", 14, 42);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Nome: ${params.motoristaNome}`, 14, 49);
+    doc.text(`Método: ${dadosPagamento.metodoLabel}`, 14, 55);
+
+    const dadosPagamentoQuebrados = doc.splitTextToSize(`Dados para pagamento: ${dadosPagamento.dadosLabel}`, 182);
+    doc.text(dadosPagamentoQuebrados, 14, 61);
+    const yAposDados = 61 + (dadosPagamentoQuebrados.length - 1) * 5 + 4;
+
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(14, yAposDados, 182, 18, 2, 2, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, yAposDados, 182, 18, 2, 2, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Fretes", 20, yAposDados + 6);
+    doc.text("Total Toneladas", 72, yAposDados + 6);
+    doc.text("Valor/Tonelada", 126, yAposDados + 6);
+    doc.text("Valor a Pagar", 172, yAposDados + 6, { align: "right" });
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(12);
+    doc.text(`${params.freteIds.length}`, 20, yAposDados + 13);
+    doc.text(`${Number(params.totalToneladas).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} t`, 72, yAposDados + 13);
+    doc.text(`R$ ${Number(params.valorTonelada).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 126, yAposDados + 13);
+    doc.setTextColor(22, 163, 74);
+    doc.text(`R$ ${Number(params.valorTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 172, yAposDados + 13, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+
+    const linhasFrete = fretesSelecionados.map((frete) => [
+      frete.id,
+      frete.dataFrete,
+      frete.rota,
+      `${Number(frete.toneladas).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} t`,
+      `R$ ${Number(frete.valorGerado).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    ]);
+
+    autoTable(doc, {
+      startY: yAposDados + 24,
+      head: [["Frete", "Data", "Rota", "Toneladas", "Valor Bruto"]],
+      body: linhasFrete,
+      theme: "grid",
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 9,
+      },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 2.2,
+      },
+      columnStyles: {
+        0: { cellWidth: 24, fontStyle: "bold" },
+        1: { cellWidth: 24, halign: "center" },
+        2: { cellWidth: 86 },
+        3: { cellWidth: 24, halign: "right" },
+        4: { cellWidth: 34, halign: "right", fontStyle: "bold" },
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+    });
+
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.3);
+      doc.line(14, 287, 196, 287);
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Página ${i} de ${pageCount}`, 105, 291, { align: "center" });
+      doc.text("Guia para contabilidade", 195, 291, { align: "right" });
+    }
+
+    const nomeArquivo = `Guia_Pagamento_${params.motoristaNome.replace(/\s+/g, "_")}_${params.pagamentoId}.pdf`;
+    doc.save(nomeArquivo);
+  };
+
   const handleSave = () => {
     // prevent double-submit
     const isMutationPending = createMutation.status === "pending" || updateMutation.status === "pending";
     if (isMutationPending) return;
     setIsSaving(true);
 
+    const nextErrors: FormErrors = { motoristaId: "", fretes: "" };
     if (!editedPagamento.motoristaId) {
-      toast.error("Selecione um motorista");
-      setIsSaving(false);
-      return;
+      nextErrors.motoristaId = "Selecione um motorista.";
     }
-
     if (selectedFretes.length === 0) {
-      toast.error("Selecione pelo menos um frete para pagamento");
+      nextErrors.fretes = "Selecione ao menos um frete.";
+    }
+    if (nextErrors.motoristaId || nextErrors.fretes) {
+      setFormErrors(nextErrors);
+      triggerShake();
       setIsSaving(false);
       return;
     }
@@ -620,15 +889,15 @@ export default function Pagamentos() {
     if (conflicting) {
       toast.error("Um ou mais fretes selecionados já estão vinculados a outro pagamento.");
       // refresh pendentes to sync UI
-      if (motoristaIdForPendentes) queryClient.invalidateQueries({ queryKey: ["fretes", "pendentes", motoristaIdForPendentes] });
+      if (usePendentesEndpoint && motoristaIdForPendentes) queryClient.invalidateQueries({ queryKey: ["fretes", "pendentes", motoristaIdForPendentes] });
       setIsSaving(false);
       return;
     }
 
     const payload: CriarPagamentoPayload = {
       motorista_id: editedPagamento.motoristaId,
-      motorista_nome: editedPagamento.motoristaNome || "",
-      periodo_fretes: buildPeriodoFretes(selectedFretes) || editedPagamento.dataFrete || "",
+      motorista_nome: (editedPagamento.motoristaNome || "").trim().toUpperCase(),
+      periodo_fretes: (buildPeriodoFretes(selectedFretes) || editedPagamento.dataFrete || "").trim().toUpperCase(),
       quantidade_fretes: selectedFretes.length,
       fretes_incluidos: selectedFretes.join(","),
       total_toneladas: editedPagamento.toneladas || 0,
@@ -643,23 +912,9 @@ export default function Pagamentos() {
     };
 
     if (isEditing && editedPagamento.id) {
-      startRefresh();
       updateMutation.mutate({ id: editedPagamento.id, data: payload });
     } else {
-      startRefresh();
       createMutation.mutate(payload);
-    }
-  };
-
-  // Função para fechar/abrir o mês
-  const handleToggleFecharMes = () => {
-    const mesFechado = mesesFechados.includes(selectedPeriodo);
-    if (mesFechado) {
-      setMesesFechados(mesesFechados.filter((m) => m !== selectedPeriodo));
-      toast.success(`Mês ${selectedPeriodo} reaberto para edição`);
-    } else {
-      setMesesFechados([...mesesFechados, selectedPeriodo]);
-      toast.success(`Mês ${selectedPeriodo} fechado com sucesso!`);
     }
   };
 
@@ -696,13 +951,12 @@ export default function Pagamentos() {
     
     // Logo/Nome da empresa em branco
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
+    doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
-    doc.text("Transportadora Transcontelli", 105, 18, { align: "center" });
+    doc.text("Caramello Logistica", 105, 18, { align: "center" });
     
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-    doc.text("Relatório de Pagamentos", 105, 25, { align: "center" });
     
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
@@ -713,11 +967,10 @@ export default function Pagamentos() {
     const nomeFormatado = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
     
     doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", "normal");
     doc.text(`Período de Referência: ${nomeFormatado}`, 105, 42, { align: "center" });
     
     doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
     doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, 105, 47, { align: "center" });
     
     doc.setTextColor(0, 0, 0);
@@ -1029,7 +1282,7 @@ export default function Pagamentos() {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(100, 116, 139);
       
-      doc.text("Sistema de gestão de fretes", 20, 285);
+      doc.text("Caramello Logistica - Sistema de Gestao de Fretes", 20, 285);
       doc.text(`Pagina ${i} de ${pageCount}`, 105, 285, { align: "center" });
       doc.text(`Relatorio Confidencial`, 190, 285, { align: "right" });
       
@@ -1039,7 +1292,7 @@ export default function Pagamentos() {
     }
     
     // ==================== DOWNLOAD ====================
-    const nomeArquivo = `Relatorio_Pagamentos_Transcontelli_${selectedPeriodo.replace("-", "_")}.pdf`;
+    const nomeArquivo = `Caramello_Logistica_Pagamentos_${selectedPeriodo.replace("-", "_")}.pdf`;
     doc.save(nomeArquivo);
     toast.success(`PDF "${nomeArquivo}" gerado com sucesso!`, { duration: 4000 });
   };
@@ -1122,12 +1375,24 @@ export default function Pagamentos() {
           {item.comprovante ? (
             <Button
               variant="ghost"
-              size="sm"
-              className="gap-2 text-xs"
-              title={`Download: ${item.comprovante.nome}`}
+              size="icon"
+              className="text-xs"
+              title={`Visualizar: ${item.comprovante.nome}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const url = getComprovanteUrl(item.comprovante?.url);
+                if (!url) {
+                  toast.error("Comprovante sem URL");
+                  return;
+                }
+                setComprovanteDialog({
+                  url,
+                  nome: item.comprovante?.nome || "Comprovante",
+                  ...parseFileType(`${url} ${item.comprovante?.nome || ""}`),
+                });
+              }}
             >
-              <Download className="h-4 w-4" />
-              Baixar
+              <Eye className="h-4 w-4" />
             </Button>
           ) : (
             <span className="text-xs text-muted-foreground">Sem anexo</span>
@@ -1168,7 +1433,6 @@ export default function Pagamentos() {
 
   return (
     <MainLayout title="Pagamentos" subtitle="Registro de pagamentos de motoristas">
-      <RefreshingIndicator isRefreshing={isRefreshing} />
       <PageHeader
         title="Pagamentos de Motoristas"
         description="Registre e acompanhe os pagamentos pelos fretes realizados"
@@ -1183,25 +1447,6 @@ export default function Pagamentos() {
               onPeriodoChange={setSelectedPeriodo}
             />
 
-            {/* Botão Fechar/Abrir Mês */}
-            <Button
-              variant={mesesFechados.includes(selectedPeriodo) ? "outline" : "secondary"}
-              onClick={handleToggleFecharMes}
-              className="gap-2"
-            >
-              {mesesFechados.includes(selectedPeriodo) ? (
-                <>
-                  <Unlock className="h-4 w-4" />
-                  Reabrir Mês
-                </>
-              ) : (
-                <>
-                  <Lock className="h-4 w-4" />
-                  Fechar Mês
-                </>
-              )}
-            </Button>
-
             {/* Botão Exportar PDF */}
             <Button variant="outline" onClick={handleExportarPDF} className="gap-2">
               <FileDown className="h-4 w-4" />
@@ -1209,26 +1454,13 @@ export default function Pagamentos() {
             </Button>
 
             {/* Botão Novo Pagamento */}
-            <Button 
-              onClick={handleOpenNewModal}
-              disabled={mesesFechados.includes(selectedPeriodo)}
-            >
+            <Button onClick={handleOpenNewModal}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Pagamento
             </Button>
           </div>
         }
       />
-
-      {/* Badge de Status do Mês */}
-      {mesesFechados.includes(selectedPeriodo) && (
-        <div className="mb-4 flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
-          <Lock className="h-4 w-4 text-blue-600" />
-          <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-            Este mês está fechado. Novos pagamentos e edições não são permitidos.
-          </p>
-        </div>
-      )}
 
       {/* Summary Cards com KPIs Comparativos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
@@ -1398,26 +1630,6 @@ export default function Pagamentos() {
                     <FileDown className="h-4 w-4" />
                     Exportar PDF
                   </Button>
-                  <Button
-                    variant={mesesFechados.includes(selectedPeriodo) ? "outline" : "secondary"}
-                    onClick={() => {
-                      handleToggleFecharMes();
-                      setFiltersOpen(false);
-                    }}
-                    className="w-full gap-2"
-                  >
-                    {mesesFechados.includes(selectedPeriodo) ? (
-                      <>
-                        <Unlock className="h-4 w-4" />
-                        Reabrir Mes
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="h-4 w-4" />
-                        Fechar Mes
-                      </>
-                    )}
-                  </Button>
                 </div>
               </div>
 
@@ -1477,7 +1689,6 @@ export default function Pagamentos() {
       {/* FAB: Novo Pagamento (Mobile) */}
       <Button
         onClick={handleOpenNewModal}
-        disabled={mesesFechados.includes(selectedPeriodo)}
         className="lg:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
         size="icon"
         aria-label="Novo Pagamento"
@@ -1581,7 +1792,6 @@ export default function Pagamentos() {
                     setSelectedPagamento(null);
                   }
                 }}
-                disabled={mesesFechados.includes(selectedPeriodo)}
                 className="gap-2"
               >
                 <Edit className="h-4 w-4" />
@@ -1807,9 +2017,25 @@ export default function Pagamentos() {
                           </p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Download className="h-4 w-4" />
-                        Baixar
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => {
+                          const url = getComprovanteUrl(selectedPagamento.comprovante?.url);
+                          if (!url) {
+                            toast.error("Comprovante sem URL");
+                            return;
+                          }
+                          setComprovanteDialog({
+                            url,
+                            nome: selectedPagamento.comprovante?.nome || "Comprovante",
+                            ...parseFileType(`${url} ${selectedPagamento.comprovante?.nome || ""}`),
+                          });
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                        Visualizar
                       </Button>
                     </div>
                   </Card>
@@ -1828,9 +2054,62 @@ export default function Pagamentos() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={!!comprovanteDialog}
+        onOpenChange={(open) => {
+          if (!open) setComprovanteDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Comprovante</DialogTitle>
+          </DialogHeader>
+          {comprovanteDialog && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{comprovanteDialog.nome}</p>
+              {comprovanteDialog.isImage ? (
+                <img
+                  src={comprovanteDialog.url}
+                  alt={comprovanteDialog.nome}
+                  className="max-h-[70vh] w-full rounded-md object-contain"
+                />
+              ) : comprovanteDialog.isPdf ? (
+                <iframe
+                  src={comprovanteDialog.url}
+                  title={comprovanteDialog.nome}
+                  className="h-[70vh] w-full rounded-md border"
+                />
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">
+                    Não foi possível identificar o tipo do arquivo para preview direto.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => window.open(comprovanteDialog.url, "_blank")}
+                  >
+                    <Download className="h-4 w-4" />
+                    Abrir PDF
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Create/Edit Modal */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => !isSaving && setIsModalOpen(open)}>
-        <DialogContent className="max-w-2xl">
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (isSaving) return;
+          setIsModalOpen(open);
+          resetFormErrors();
+        }}
+      >
+        <DialogContent className={cn("max-w-2xl", isShaking && "animate-shake")}>
           <DialogHeader>
             <DialogTitle>
               {isEditing ? "Editar Pagamento" : "Registrar Novo Pagamento"}
@@ -1844,8 +2123,11 @@ export default function Pagamentos() {
               <Select
                 value={editedPagamento.motoristaId || ""}
                 onValueChange={handleMotoristaChange}
+                onOpenChange={(open) => {
+                  if (open) clearFormError("motoristaId");
+                }}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn(fieldErrorClass(formErrors.motoristaId))}>
                   <SelectValue placeholder="Selecione um motorista" />
                 </SelectTrigger>
                 <SelectContent className="max-h-64 overflow-y-auto">
@@ -1860,6 +2142,7 @@ export default function Pagamentos() {
                   )}
                 </SelectContent>
               </Select>
+              <FieldError message={formErrors.motoristaId} />
             </div>
 
             {/* Dados de Pagamento do Motorista */}
@@ -1916,6 +2199,7 @@ export default function Pagamentos() {
                     </Badge>
                   )}
                 </div>
+                <FieldError message={formErrors.fretes} />
                 {fretesNaoPagos.length === 0 ? (
                   <Card className="p-4 bg-amber-50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900 flex items-center gap-3">
                     <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0" />
@@ -2246,7 +2530,7 @@ export default function Pagamentos() {
                   id="comprovante"
                   className="hidden"
                   onChange={handleFileChange}
-                  accept=".pdf,.jpg,.jpeg,.png"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
                 />
                 <label
                   htmlFor="comprovante"
@@ -2258,11 +2542,33 @@ export default function Pagamentos() {
                       {selectedFile ? selectedFile.name : "Clique para selecionar ou arraste"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      PDF, JPG ou PNG (máx. 5MB)
+                      PDF ou imagem (JPG, PNG, WEBP) - máx. 5MB
                     </p>
                   </div>
                 </label>
               </div>
+              {selectedFile && (
+                <div className="rounded-lg border border-muted p-3 bg-muted/30">
+                  {selectedFileIsImage && selectedFilePreview ? (
+                    <img
+                      src={selectedFilePreview}
+                      alt="Preview do comprovante"
+                      className="max-h-48 w-full rounded-md object-contain"
+                    />
+                  ) : selectedFileIsPdf && selectedFilePreview ? (
+                    <iframe
+                      src={selectedFilePreview}
+                      title="Preview do comprovante"
+                      className="h-64 w-full rounded-md border"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <FileText className="h-4 w-4" />
+                      <span>Preview não disponível para este arquivo.</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Observações */}
@@ -2285,7 +2591,10 @@ export default function Pagamentos() {
 
           <DialogFooter className="gap-2">
             <ModalSubmitFooter
-              onCancel={() => setIsModalOpen(false)}
+              onCancel={() => {
+                setIsModalOpen(false);
+                resetFormErrors();
+              }}
               onSubmit={handleSave}
               isSubmitting={isSaving}
               disableSubmit={isSaving}

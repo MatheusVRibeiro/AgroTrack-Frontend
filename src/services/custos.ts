@@ -2,10 +2,11 @@ import api from "@/api/axios";
 import { isAxiosError } from "axios";
 import type { Custo, CriarCustoPayload, ApiResponse } from "@/types";
 
-const listarCustos = async (): Promise<ApiResponse<Custo[]>> => {
+const listarCustos = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Custo[]>> => {
   try {
-    const res = await api.get("/custos");
-    return { success: true, data: res.data.data || res.data, status: res.status };
+    const { page = 1, limit = 50 } = params ?? {};
+    const res = await api.get("/custos", { params: { page, limit } });
+    return { success: true, data: res.data.data || res.data, meta: res.data.meta, status: res.status };
   } catch (err: unknown) {
     let message = "Erro ao listar custos";
     if (isAxiosError(err)) {

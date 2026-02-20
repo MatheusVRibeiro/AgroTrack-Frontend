@@ -4,10 +4,12 @@ import type { CriarFazendaPayload } from "@/types";
 
 export const FAZENDAS_QUERY_KEY = ["fazendas"] as const;
 
-export function useFazendas() {
+export function useFazendas(params?: { page?: number; limit?: number }) {
+  const page = params?.page ?? 1;
+  const limit = params?.limit ?? 50;
   return useQuery({
-    queryKey: FAZENDAS_QUERY_KEY,
-    queryFn: fazendasService.listarFazendas,
+    queryKey: [...FAZENDAS_QUERY_KEY, page, limit],
+    queryFn: () => fazendasService.listarFazendas({ page, limit }),
     staleTime: 1000 * 60 * 5,
   });
 }

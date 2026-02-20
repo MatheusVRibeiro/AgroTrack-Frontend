@@ -147,7 +147,7 @@ export default function Dashboard() {
   // Queries para buscar dados reais do backend
   const { data: fretesData, isLoading: fretesLoading } = useQuery({
     queryKey: ["fretes"],
-    queryFn: fretesService.listarFretes,
+    queryFn: () => fretesService.listarFretes(),
     staleTime: 5 * 60 * 1000, // 5 minutos
   });
 
@@ -159,7 +159,7 @@ export default function Dashboard() {
 
   const { data: motoristasResponse } = useQuery({
     queryKey: ["motoristas"],
-    queryFn: motoristasService.listarMotoristas,
+    queryFn: () => motoristasService.listarMotoristas(),
     staleTime: 5 * 60 * 1000, // 5 minutos
   });
 

@@ -4,6 +4,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
+import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,6 +55,7 @@ import { useCriarMotorista, useMotoristas, useAtualizarMotorista } from "@/hooks
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
 import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { useRefreshData } from "@/hooks/useRefreshData";
+import { useShake } from "@/hooks/useShake";
 
 // Payload para criar motorista
 interface CriarMotoristaPayload {
@@ -103,6 +105,7 @@ export default function Motoristas() {
   const itemsPerPage = ITEMS_PER_PAGE;
   const [errosCampos, setErrosCampos] = useState<Record<string, string>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const { isShaking, triggerShake } = useShake(220);
 
   const {
     data: motoristasResponse,
@@ -220,6 +223,7 @@ export default function Motoristas() {
 
     if (Object.keys(novosErros).length > 0) {
       setErrosCampos(novosErros);
+      triggerShake();
       const primeiroErro = Object.keys(novosErros)[0];
       toast.error(`Erro: ${novosErros[primeiroErro]}`);
       return;
@@ -227,7 +231,7 @@ export default function Motoristas() {
 
     // Build minimal payload (used for create and update)
     const payload: Record<string, any> = {
-      nome: editedMotorista.nome?.trim() || "",
+      nome: (editedMotorista.nome?.trim() || "").toUpperCase(),
       telefone: apenasNumeros(editedMotorista.telefone || ""),
       tipo: editedMotorista.tipo,
       status: editedMotorista.status || "ativo",
@@ -305,6 +309,9 @@ export default function Motoristas() {
 
       // Map any 'none' sentinel to null already handled in normalized values
       const finalUpdatePayload = cleanPayload(changed);
+      if (finalUpdatePayload.nome) {
+        finalUpdatePayload.nome = String(finalUpdatePayload.nome).trim().toUpperCase();
+      }
 
       if (Object.keys(finalUpdatePayload).length === 0) {
         toast.info('Nenhuma alteração detectada.');
@@ -1032,8 +1039,15 @@ export default function Motoristas() {
       </Dialog>
 
       {/* Create/Edit Modal */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => !isSaving && setIsModalOpen(open)}>
-        <DialogContent className="max-w-2xl">
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          if (isSaving) return;
+          setIsModalOpen(open);
+          setErrosCampos({});
+        }}
+      >
+        <DialogContent className={`max-w-2xl ${isShaking ? "animate-shake" : ""}`}>
           <DialogHeader>
             <DialogTitle>
               {isEditing ? "Editar Motorista" : "Novo Motorista"}
@@ -1053,9 +1067,10 @@ export default function Motoristas() {
                     setEditedMotorista({ ...editedMotorista, nome: e.target.value });
                     setErrosCampos({ ...errosCampos, nome: "" });
                   }}
-                  className={errosCampos.nome ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  onFocus={() => setErrosCampos({ ...errosCampos, nome: "" })}
+                  className={fieldErrorClass(errosCampos.nome)}
                 />
-                {errosCampos.nome && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.nome}</p>}
+                <FieldError message={errosCampos.nome} />
               </div>
 
               <InputMascarado
@@ -1099,9 +1114,10 @@ export default function Motoristas() {
                     setEditedMotorista({ ...editedMotorista, email: e.target.value });
                     setErrosCampos({ ...errosCampos, email: "" });
                   }}
-                  className={errosCampos.email ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  onFocus={() => setErrosCampos({ ...errosCampos, email: "" })}
+                  className={fieldErrorClass(errosCampos.email)}
                 />
-                {errosCampos.email && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.email}</p>}
+                <FieldError message={errosCampos.email} />
               </div>
             </div>
 
@@ -1118,8 +1134,11 @@ export default function Motoristas() {
                     });
                     setErrosCampos({ ...errosCampos, tipo: "" });
                   }}
+                  onOpenChange={(open) => {
+                    if (open) setErrosCampos({ ...errosCampos, tipo: "" });
+                  }}
                 >
-                  <SelectTrigger className={errosCampos.tipo ? "border-red-500 focus:ring-red-500" : ""}>
+                  <SelectTrigger className={fieldErrorClass(errosCampos.tipo)}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1128,7 +1147,7 @@ export default function Motoristas() {
                     <SelectItem value="agregado">Agregado</SelectItem>
                   </SelectContent>
                 </Select>
-                {errosCampos.tipo && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.tipo}</p>}
+                <FieldError message={errosCampos.tipo} />
               </div>
               
             </div>
@@ -1153,8 +1172,11 @@ export default function Motoristas() {
                     setEditedMotorista({ ...editedMotorista, status: value });
                     setErrosCampos({ ...errosCampos, status: "" });
                   }}
+                  onOpenChange={(open) => {
+                    if (open) setErrosCampos({ ...errosCampos, status: "" });
+                  }}
                 >
-                  <SelectTrigger className={errosCampos.status ? "border-red-500 focus:ring-red-500" : ""}>
+                  <SelectTrigger className={fieldErrorClass(errosCampos.status)}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1163,7 +1185,7 @@ export default function Motoristas() {
                     <SelectItem value="ferias">Férias</SelectItem>
                   </SelectContent>
                 </Select>
-                {errosCampos.status && <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.status}</p>}
+                <FieldError message={errosCampos.status} />
               </div>
             </div>
 
@@ -1254,11 +1276,10 @@ export default function Motoristas() {
                           setEditedMotorista({ ...editedMotorista, chave_pix: e.target.value });
                           setErrosCampos({ ...errosCampos, chave_pix: "" });
                         }}
-                        className={errosCampos.chave_pix ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        onFocus={() => setErrosCampos({ ...errosCampos, chave_pix: "" })}
+                        className={fieldErrorClass(errosCampos.chave_pix)}
                       />
-                      {errosCampos.chave_pix && (
-                        <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.chave_pix}</p>
-                      )}
+                      <FieldError message={errosCampos.chave_pix} />
                     </div>
                   )}
                 </div>
@@ -1277,11 +1298,10 @@ export default function Motoristas() {
                         setEditedMotorista({ ...editedMotorista, banco: e.target.value });
                         setErrosCampos({ ...errosCampos, banco: "" });
                       }}
-                      className={errosCampos.banco ? "border-red-500 focus-visible:ring-red-500" : ""}
+                      onFocus={() => setErrosCampos({ ...errosCampos, banco: "" })}
+                      className={fieldErrorClass(errosCampos.banco)}
                     />
-                    {errosCampos.banco && (
-                      <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.banco}</p>
-                    )}
+                    <FieldError message={errosCampos.banco} />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1295,11 +1315,10 @@ export default function Motoristas() {
                           setEditedMotorista({ ...editedMotorista, agencia: e.target.value });
                           setErrosCampos({ ...errosCampos, agencia: "" });
                         }}
-                        className={errosCampos.agencia ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        onFocus={() => setErrosCampos({ ...errosCampos, agencia: "" })}
+                        className={fieldErrorClass(errosCampos.agencia)}
                       />
-                      {errosCampos.agencia && (
-                        <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.agencia}</p>
-                      )}
+                      <FieldError message={errosCampos.agencia} />
                     </div>
 
                     <div className="space-y-2">
@@ -1312,11 +1331,10 @@ export default function Motoristas() {
                           setEditedMotorista({ ...editedMotorista, conta: e.target.value });
                           setErrosCampos({ ...errosCampos, conta: "" });
                         }}
-                        className={errosCampos.conta ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        onFocus={() => setErrosCampos({ ...errosCampos, conta: "" })}
+                        className={fieldErrorClass(errosCampos.conta)}
                       />
-                      {errosCampos.conta && (
-                        <p className="text-sm text-red-500 dark:text-red-400">{errosCampos.conta}</p>
-                      )}
+                      <FieldError message={errosCampos.conta} />
                     </div>
                   </div>
 
@@ -1344,7 +1362,10 @@ export default function Motoristas() {
 
           <DialogFooter className="gap-2">
             <ModalSubmitFooter
-              onCancel={() => setIsModalOpen(false)}
+              onCancel={() => {
+                setIsModalOpen(false);
+                setErrosCampos({});
+              }}
               onSubmit={handleSave}
               isSubmitting={isSaving}
               submitLabel={isEditing ? "Salvar Alterações" : "Cadastrar Motorista"}
