@@ -1216,7 +1216,7 @@ export default function Pagamentos() {
   // Resetar para página 1 quando aplicar novos filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, motoristaFilter]);
+  }, [search, statusFilter, motoristaFilter, tipoVisualizacao, selectedPeriodo]);
 
   // Função para exportar Resumo Geral (Mockada temporariamente)
   const handleExportarGeralPDF = () => {

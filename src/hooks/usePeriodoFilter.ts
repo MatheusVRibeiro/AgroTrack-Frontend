@@ -10,8 +10,21 @@ interface UsePeriodoFilterProps<T> {
 }
 
 export function usePeriodoFilter<T>({ data, getDataField }: UsePeriodoFilterProps<T>) {
-  const [tipoVisualizacao, setTipoVisualizacao] = useState<TipoVisualizacao>("mensal");
-  const [selectedPeriodo, setSelectedPeriodo] = useState(format(new Date(), "yyyy-MM"));
+  const [tipoVisualizacao, setTipoVisualizacao] = useState<TipoVisualizacao>(() => {
+    return (localStorage.getItem("periodo_tipoVisualizacao") as TipoVisualizacao) || "mensal";
+  });
+  const [selectedPeriodo, setSelectedPeriodo] = useState(() => {
+    const salvo = localStorage.getItem("periodo_tipoVisualizacao") || "mensal";
+    const hoje = new Date();
+    if (salvo === "mensal") return format(hoje, "yyyy-MM");
+    if (salvo === "trimestral") return `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;
+    if (salvo === "semestral") return `${hoje.getFullYear()}-S${hoje.getMonth() <= 5 ? 1 : 2}`;
+    return String(hoje.getFullYear());
+  });
+
+  useEffect(() => {
+    localStorage.setItem("periodo_tipoVisualizacao", tipoVisualizacao);
+  }, [tipoVisualizacao]);
 
   // Função auxiliar para parsear datas
   const parseDateBR = (value: unknown) => {
@@ -37,7 +50,14 @@ export function usePeriodoFilter<T>({ data, getDataField }: UsePeriodoFilterProp
 
   // Extrair períodos disponíveis baseado nos dados reais
   const periodosDisponiveis = useMemo(() => {
-    if (!Array.isArray(data) || data.length === 0) return [];
+    const hoje = new Date();
+    let periodoAtual = "";
+    if (tipoVisualizacao === "mensal") periodoAtual = format(hoje, "yyyy-MM");
+    else if (tipoVisualizacao === "trimestral") periodoAtual = `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;
+    else if (tipoVisualizacao === "semestral") periodoAtual = `${hoje.getFullYear()}-S${hoje.getMonth() <= 5 ? 1 : 2}`;
+    else if (tipoVisualizacao === "anual") periodoAtual = String(hoje.getFullYear());
+
+    if (!Array.isArray(data) || data.length === 0) return [periodoAtual];
 
     const periodos = data.map((item) => {
       const dataStr = getDataField(item);
@@ -58,6 +78,8 @@ export function usePeriodoFilter<T>({ data, getDataField }: UsePeriodoFilterProp
       }
       return "";
     });
+
+    periodos.push(periodoAtual);
 
     // Remover duplicatas e ordenar
     const periodosUnicos = Array.from(new Set(periodos)).filter(Boolean).sort();
@@ -114,8 +136,8 @@ export function usePeriodoFilter<T>({ data, getDataField }: UsePeriodoFilterProp
   useEffect(() => {
     if (periodosDisponiveis.length === 0) return;
 
-    // Se período atual não existe, usar o mais recente
-    if (!periodosDisponiveis.includes(selectedPeriodo)) {
+    // Se período atual não existe, usar o mais recente (ignorando se tiver vazio)
+    if (!periodosDisponiveis.includes(selectedPeriodo) && periodosDisponiveis.length > 0) {
       setSelectedPeriodo(periodosDisponiveis[periodosDisponiveis.length - 1]);
     }
   }, [periodosDisponiveis, selectedPeriodo]);

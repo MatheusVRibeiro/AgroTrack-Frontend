@@ -351,7 +351,7 @@ export default function Fazendas() {
   // Resetar para página 1 quando aplicar novos filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, tipoVisualizacao, selectedPeriodo]);
 
   const fazendasAtivas = paginatedData.filter((p) => !p.colheita_finalizada);
   const fazendasFinalizadas = paginatedData.filter((p) => p.colheita_finalizada);

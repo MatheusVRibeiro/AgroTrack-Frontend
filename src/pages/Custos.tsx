@@ -591,34 +591,24 @@ export default function Custos() {
   const pedagioItems = filteredData.filter((c) => getTipoKey(c.tipo) === "pedagio");
   const outrosItems = filteredData.filter((c) => getTipoKey(c.tipo) === "outros");
 
-  // Ordenar por código do frete (mais recente primeiro). Tenta extrair ano+sequência
-  // Ex: FRETE-2026-086 ou FRT-2026-086
-  const extractYearSeq = (s?: unknown) => {
-    if (!s) return null;
-    const raw = String(s).trim();
-    const m = raw.match(/(\d{4})[^\d]*(\d{1,})$/);
-    if (!m) return null;
-    return { year: Number(m[1]), seq: Number(m[2]) };
-  };
+  // Ordenar por ID para exibir os itens recém criados primeiro (ordem decrescente)
+  const compareByNewestFirst = (a: Custo, b: Custo) => {
+    const idA = Number(a.id);
+    const idB = Number(b.id);
 
-  const compareByFreteCodeDesc = (a: Custo, b: Custo) => {
-    const aKey = extractYearSeq(a.codigo_frete);
-    const bKey = extractYearSeq(b.codigo_frete);
-    if (aKey && bKey) {
-      if (bKey.year !== aKey.year) return bKey.year - aKey.year;
-      if (bKey.seq !== aKey.seq) return bKey.seq - aKey.seq;
-      return 0;
+    // Se forem IDs sequenciais numéricos
+    if (!isNaN(idA) && !isNaN(idB)) {
+      if (idB !== idA) return idB - idA;
     }
-    if (aKey && !bKey) return -1; // a has code -> first
-    if (!aKey && bKey) return 1;  // b has code -> first
-    // both without codigo_frete -> keep by frete_id desc
-    return String(b.frete_id || "").localeCompare(String(a.frete_id || ""));
+
+    // Fallback para string (ex: UUIDs ou se não for um número válido)
+    return String(b.id).localeCompare(String(a.id));
   };
 
-  combustivelItems.sort(compareByFreteCodeDesc);
-  manutencaoItems.sort(compareByFreteCodeDesc);
-  pedagioItems.sort(compareByFreteCodeDesc);
-  outrosItems.sort(compareByFreteCodeDesc);
+  combustivelItems.sort(compareByNewestFirst);
+  manutencaoItems.sort(compareByNewestFirst);
+  pedagioItems.sort(compareByNewestFirst);
+  outrosItems.sort(compareByNewestFirst);
 
   // Lógica de paginação
   // Lógica de paginação
@@ -641,7 +631,7 @@ export default function Custos() {
     setPageManutencao(1);
     setPagePedagio(1);
     setPageOutros(1);
-  }, [search, tipoFilter, motoristaFilter, comprovanteFilter, dateFrom, dateTo]);
+  }, [search, tipoFilter, motoristaFilter, comprovanteFilter, dateFrom, dateTo, tipoVisualizacao, selectedPeriodo]);
 
   const totalCustos = custosFiltrados.reduce((acc, c) => acc + toNumber(c.valor), 0);
   const totalCombustivel = combustivelItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
@@ -761,47 +751,115 @@ export default function Custos() {
   ) => {
     if (totalPagesValue <= 1) return null;
     return (
-      <div className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground w-full text-center sm:text-left">
-          Mostrando {((currentPageValue - 1) * itemsPerPage) + 1} a {Math.min(currentPageValue * itemsPerPage, totalItems)} de {totalItems} registros
-        </p>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            className="h-8 w-8 p-0"
-            onClick={() => setPageFunc(Math.max(1, currentPageValue - 1))}
-            disabled={currentPageValue === 1}
-          >
-            <span className="sr-only">Anterior</span>
-            <PaginationPrevious className="h-4 w-4" />
-          </Button>
-          <div className="text-sm font-medium px-2 block sm:hidden">
-            {currentPageValue} / {totalPagesValue}
+      <>
+        {/* Mobile Pagination: Simple Prev/Next */}
+        <div className="mt-4 md:hidden">
+          <div className="flex items-center justify-between mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPageFunc(Math.max(1, currentPageValue - 1))}
+              disabled={currentPageValue === 1}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground font-medium">
+              {currentPageValue} / {totalPagesValue}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPageFunc(Math.min(totalPagesValue, currentPageValue + 1))}
+              disabled={currentPageValue === totalPagesValue}
+            >
+              Próxima
+            </Button>
           </div>
-          <div className="hidden sm:flex items-center space-x-2">
-            {Array.from({ length: totalPagesValue }, (_, i) => i + 1).map((page) => {
-              const isVisible = Math.abs(page - currentPageValue) <= 1 || page === 1 || page === totalPagesValue;
-              if (!isVisible) return null;
-              if (page === 2 && currentPageValue > 3) return <PaginationEllipsis key="ellipsis-start" />;
-              if (page === totalPagesValue - 1 && currentPageValue < totalPagesValue - 2) return <PaginationEllipsis key="ellipsis-end" />;
-              return (
-                <PaginationLink isActive={page === currentPageValue} onClick={() => setPageFunc(page)} key={page} className="cursor-pointer">
-                  {page}
-                </PaginationLink>
-              );
-            })}
-          </div>
-          <Button
-            variant="outline"
-            className="h-8 w-8 p-0"
-            onClick={() => setPageFunc(Math.min(totalPagesValue, currentPageValue + 1))}
-            disabled={currentPageValue === totalPagesValue}
-          >
-            <span className="sr-only">Próxima</span>
-            <PaginationNext className="h-4 w-4" />
-          </Button>
+          <p className="text-xs text-center text-muted-foreground">
+            {totalItems} registros
+          </p>
         </div>
-      </div>
+
+        {/* Desktop Pagination: Full */}
+        <div className="mt-4 hidden md:flex items-center justify-center gap-4 pb-2">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPageFunc(Math.max(1, currentPageValue - 1));
+                  }}
+                  className={currentPageValue === 1 ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+
+              {Array.from({ length: totalPagesValue }, (_, i) => i + 1).map((page) => {
+                const isCurrentPage = page === currentPageValue;
+                const isVisible =
+                  Math.abs(page - currentPageValue) <= 1 ||
+                  page === 1 ||
+                  page === totalPagesValue;
+
+                if (!isVisible) {
+                  return null;
+                }
+
+                if (page === 2 && currentPageValue > 3) {
+                  return (
+                    <PaginationItem key="ellipsis-start">
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  );
+                }
+
+                if (
+                  page === totalPagesValue - 1 &&
+                  currentPageValue < totalPagesValue - 2
+                ) {
+                  return (
+                    <PaginationItem key="ellipsis-end">
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  );
+                }
+
+                return (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPageFunc(page);
+                      }}
+                      isActive={isCurrentPage}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPageFunc(Math.min(totalPagesValue, currentPageValue + 1));
+                  }}
+                  className={
+                    currentPageValue === totalPagesValue ? "pointer-events-none opacity-50" : ""
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+          <div className="text-xs text-muted-foreground flex items-center">
+            Página {currentPageValue} de {totalPagesValue} • {totalItems} registros
+          </div>
+        </div>
+      </>
     );
   };
 

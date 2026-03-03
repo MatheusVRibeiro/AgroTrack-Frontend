@@ -17,11 +17,20 @@ interface BackendFreteResponse {
   data: { id: string };
 }
 
-export async function listarFretes(params?: { page?: number; limit?: number }): Promise<ApiResponse<Frete[]>> {
+export async function listarFretes(params?: {
+  page?: number;
+  limit?: number;
+  data_inicio?: string;
+  data_fim?: string;
+  motorista_id?: string | number;
+  caminhao_id?: string | number;
+  fazenda_id?: string | number;
+  search?: string;
+}): Promise<ApiResponse<Frete[]>> {
   try {
-    const { page = 1, limit = 50 } = params ?? {};
+    const { page = 1, limit = 50, ...outros } = params ?? {};
     const res = await api.get<BackendFretesResponse>("/fretes", {
-      params: { page, limit },
+      params: { page, limit, ...outros },
     });
 
     if (res.data.success && res.data.data) {
@@ -41,6 +50,35 @@ export async function listarFretes(params?: { page?: number; limit?: number }): 
       message = err;
     }
     return { success: false, data: null, message };
+  }
+}
+
+export async function obterEstatisticas(params?: {
+  data_inicio?: string;
+  data_fim?: string;
+  motorista_id?: string | number;
+  caminhao_id?: string | number;
+  fazenda_id?: string | number;
+  search?: string;
+}): Promise<ApiResponse<any>> {
+  try {
+    const res = await api.get<any>("/fretes/estatisticas", {
+      params,
+    });
+
+    if (res.data.success && res.data.data) {
+      return { success: true, data: res.data.data, status: res.status };
+    }
+
+    return { success: false, data: null, message: "Resposta inválida do servidor" };
+  } catch (err: unknown) {
+    let message = "Erro ao carregar estatisticas";
+    if (isAxiosError(err)) {
+      message = err.response?.data?.message ?? err.message ?? message;
+      const status = err.response?.status;
+      return { success: false, data: null, message, status };
+    }
+    return { success: false, data: null, message: String(err) };
   }
 }
 

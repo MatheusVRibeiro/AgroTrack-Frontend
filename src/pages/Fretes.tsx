@@ -77,7 +77,7 @@ import { ptBR } from "date-fns/locale";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useMotoristas } from "@/hooks/queries/useMotoristas";
-import { useFretes } from "@/hooks/queries/useFretes";
+import { useFretes, useCriarFrete, useDeletarFrete, useEstatisticasFretes } from "@/hooks/queries/useFretes";
 
 interface Frete {
   id: string;
@@ -353,8 +353,21 @@ export default function Fretes() {
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
   // Estados para Exercício (Ano/Mês) e Fechamento
-  const [tipoVisualizacao, setTipoVisualizacao] = useState<"mensal" | "trimestral" | "semestral" | "anual">("mensal");
-  const [selectedPeriodo, setSelectedPeriodo] = useState(format(new Date(), "yyyy-MM")); // Mês atual
+  const [tipoVisualizacao, setTipoVisualizacao] = useState<"mensal" | "trimestral" | "semestral" | "anual">(() => {
+    return (localStorage.getItem("fretes_tipoVisualizacao") as any) || "mensal";
+  });
+  const [selectedPeriodo, setSelectedPeriodo] = useState(() => {
+    const salvo = localStorage.getItem("fretes_tipoVisualizacao") || "mensal";
+    const hoje = new Date();
+    if (salvo === "mensal") return format(hoje, "yyyy-MM");
+    if (salvo === "trimestral") return `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;
+    if (salvo === "semestral") return `${hoje.getFullYear()}-S${hoje.getMonth() + 1 <= 6 ? 1 : 2}`;
+    return String(hoje.getFullYear());
+  });
+
+  useEffect(() => {
+    localStorage.setItem("fretes_tipoVisualizacao", tipoVisualizacao);
+  }, [tipoVisualizacao]);
   const [filtersOpen, setFiltersOpen] = useState(false); // Controle do Sheet de filtros mobile
 
   // Dados históricos para comparação (simulado - mes anterior)
@@ -381,10 +394,47 @@ export default function Fretes() {
     },
   });
 
-  // Carregar fretes paginados (server-side) para não sobrecarregar a API
-  const { data: fretesResponse, isLoading: isLoadingFretes } = useFretes({ page: currentPage, limit: itemsPerPage });
-  // Carregar todos os fretes em background apenas para somatórios e lista de períodos
-  const { data: fretesAllResponse } = useFretes({ fetchAll: true });
+  // Hook para estatísticas
+  const { data: estatisticasResponse } = useEstatisticasFretes();
+
+  // Calcular data inicio/fim do periodo selecionado p/ enviar à API
+  const periodoDatas = useMemo(() => {
+    let data_inicio = "";
+    let data_fim = "";
+    if (selectedPeriodo && tipoVisualizacao) {
+      const parts = selectedPeriodo.split("-");
+      const ano = parseInt(parts[0]);
+      if (tipoVisualizacao === "mensal" && parts[1]) {
+        const mes = parseInt(parts[1]);
+        const lastDay = new Date(ano, mes, 0).getDate();
+        data_inicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+        data_fim = `${ano}-${String(mes).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      } else if (tipoVisualizacao === "trimestral" && parts[1]) {
+        const tri = parseInt(parts[1].replace("T", ""));
+        const mesInicio = (tri - 1) * 3 + 1;
+        const mesFim = tri * 3;
+        const lastDay = new Date(ano, mesFim, 0).getDate();
+        data_inicio = `${ano}-${String(mesInicio).padStart(2, "0")}-01`;
+        data_fim = `${ano}-${String(mesFim).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      } else if (tipoVisualizacao === "semestral" && parts[1]) {
+        const sem = parseInt(parts[1].replace("S", ""));
+        const mesInicio = sem === 1 ? 1 : 7;
+        const mesFim = sem === 1 ? 6 : 12;
+        const lastDay = new Date(ano, mesFim, 0).getDate();
+        data_inicio = `${ano}-${String(mesInicio).padStart(2, "0")}-01`;
+        data_fim = `${ano}-${String(mesFim).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      } else if (tipoVisualizacao === "anual") {
+        data_inicio = `${ano}-01-01`;
+        data_fim = `${ano}-12-31`;
+      }
+    }
+    return { data_inicio, data_fim };
+  }, [selectedPeriodo, tipoVisualizacao]);
+
+  // Carregar todos os fretes DO MÊS ESPECÍFICO em background para paginação local/somatórios (+leve)
+  const { data: fretesAllResponse, isLoading: isLoadingFretes } = useFretes({ fetchAll: true, ...periodoDatas });
+  // Passaremos o fretesAllResponse para fretesResponse, afinal a tabela paginará no client
+  const fretesResponse = fretesAllResponse;
 
   // Carregar pagamentos (usado para marcar fretes pagos)
   const { data: pagamentosResponse } = useQuery<ApiResponse<any[]>>({
@@ -553,15 +603,20 @@ export default function Fretes() {
   const fretesAllState = Array.isArray(fretesAllAPI) ? fretesAllAPI : [];
   const editRouteHandledRef = useRef<string | null>(null);
 
-  // Validar se período selecionado existe nos dados
+  // Validar se período selecionado existe nos dados estatisticos
   useEffect(() => {
-    if (!Array.isArray(fretesAllState) || fretesAllState.length === 0) return;
+    // Extrair períodos disponíveis a partir do backend de estatisticas (onde vêm os meses exatos)
+    const periodosApi = Array.isArray(estatisticasResponse?.data?.periodos_disponiveis)
+      ? estatisticasResponse.data.periodos_disponiveis
+      : [];
 
-    // Extrair períodos disponíveis
-    const periodos = fretesAllState.map((f) => {
-      const freteDate = parseDateBR(f.dataFrete);
-      const anoFrete = freteDate.getFullYear();
-      const mesFrete = freteDate.getMonth() + 1;
+    const periodosConvertidos = periodosApi.map((pStr: string) => {
+      // pStr é 'YYYY-MM'
+      const dt = new Date(pStr + "-15"); // Dia 15 para evitar timezone
+      if (Number.isNaN(dt.getTime())) return "";
+
+      const anoFrete = dt.getFullYear();
+      const mesFrete = dt.getMonth() + 1;
 
       if (tipoVisualizacao === "mensal") {
         return `${anoFrete}-${String(mesFrete).padStart(2, "0")}`;
@@ -575,15 +630,24 @@ export default function Fretes() {
         return String(anoFrete);
       }
       return "";
-    });
+    }).filter(Boolean);
 
-    const periodosUnicos = Array.from(new Set(periodos)).filter(Boolean).sort();
+    const hoje = new Date();
+    let periodoAtual = "";
+    if (tipoVisualizacao === "mensal") periodoAtual = format(hoje, "yyyy-MM");
+    else if (tipoVisualizacao === "trimestral") periodoAtual = `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;
+    else if (tipoVisualizacao === "semestral") periodoAtual = `${hoje.getFullYear()}-S${hoje.getMonth() <= 5 ? 1 : 2}`;
+    else if (tipoVisualizacao === "anual") periodoAtual = String(hoje.getFullYear());
 
-    // Se período atual não existe, usar o mais recente
-    if (!periodosUnicos.includes(selectedPeriodo) && periodosUnicos.length > 0) {
-      setSelectedPeriodo(periodosUnicos[periodosUnicos.length - 1]);
+    periodosConvertidos.push(periodoAtual);
+
+    const periodosUnicos = Array.from(new Set<string>(periodosConvertidos as string[])).sort();
+
+    // Se período atual não existe e há períodos únicos, usar o mais recente, mas o atual foi incluído então manterá.  
+    if (!periodosUnicos.includes(selectedPeriodo as string) && periodosUnicos.length > 0) {
+      setSelectedPeriodo(periodosUnicos[periodosUnicos.length - 1] as string);
     }
-  }, [fretesState, tipoVisualizacao, selectedPeriodo]);
+  }, [estatisticasResponse, tipoVisualizacao, selectedPeriodo]);
 
   const handleOpenNewModal = async () => {
     toast.loading("📂 Carregando fazendas...");
@@ -1474,43 +1538,13 @@ export default function Fretes() {
     return matchesSearch && matchesMotorista && matchesCaminhao && matchesFazenda && matchesPeriodo;
   });
 
-  // Lógica de paginação (server-side)
-  // Determine whether user-applied filters require client-side pagination
-  const periodoPadrao = useMemo(() => {
-    const hoje = new Date();
-    if (tipoVisualizacao === "mensal") return format(hoje, "yyyy-MM");
-    if (tipoVisualizacao === "trimestral") {
-      const trimestre = Math.ceil((hoje.getMonth() + 1) / 3);
-      return `${hoje.getFullYear()}-T${trimestre}`;
-    }
-    if (tipoVisualizacao === "semestral") {
-      const semestre = hoje.getMonth() + 1 <= 6 ? 1 : 2;
-      return `${hoje.getFullYear()}-S${semestre}`;
-    }
-    return String(hoje.getFullYear());
-  }, [tipoVisualizacao]);
+  // Lógica de paginação (agora sempre client-side devido ao filtro de período do front)
+  const isFiltering = true;
 
-  const periodoFoiAlterado = selectedPeriodo !== periodoPadrao;
-
-  const isFiltering =
-    Boolean(search) ||
-    motoristaFilter !== "all" ||
-    caminhaoFilter !== "all" ||
-    fazendaFilter !== "all" ||
-    Boolean(dateRange?.from) ||
-    Boolean(dateRange?.to) ||
-    periodoFoiAlterado;
-
-  // If user is filtering, paginate client-side over the full filtered dataset to avoid mismatched pages
-  let totalPages = fretesResponse?.meta?.totalPages ?? Math.ceil(filteredData.length / itemsPerPage);
-  let paginatedData = filteredData; // default: server returns current page
-
-  if (isFiltering) {
-    const totalFiltered = filteredAllData.length;
-    totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    paginatedData = filteredAllData.slice(startIndex, startIndex + itemsPerPage);
-  }
+  const totalFiltered = filteredAllData.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedData = filteredAllData.slice(startIndex, startIndex + itemsPerPage);
 
   // Resetar para página 1 quando aplicar novos filtros
   useEffect(() => {
@@ -1525,14 +1559,19 @@ export default function Fretes() {
     )
   ) as string[];
 
-  // Extrair períodos disponíveis baseado nos dados reais
-  const periodosDisponiveis = useMemo(() => {
-    if (!Array.isArray(fretesAllState)) return [];
+  // Extrair períodos disponíveis baseado nos dados estáticos da API
+  const periodosDisponiveis: string[] = useMemo(() => {
+    const periodosApi = Array.isArray(estatisticasResponse?.data?.periodos_disponiveis)
+      ? estatisticasResponse.data.periodos_disponiveis
+      : [];
 
-    const periodos = fretesAllState.map((f) => {
-      const freteDate = parseDateBR(f.dataFrete);
-      const anoFrete = freteDate.getFullYear();
-      const mesFrete = freteDate.getMonth() + 1; // 1-12
+    const periodosConvertidos: string[] = periodosApi.map((pStr: any) => {
+      // pStr é 'YYYY-MM'
+      const dt = new Date(pStr + "-15"); // Dia 15 para evitar timezone
+      if (Number.isNaN(dt.getTime())) return "";
+
+      const anoFrete = dt.getFullYear();
+      const mesFrete = dt.getMonth() + 1;
 
       if (tipoVisualizacao === "mensal") {
         return `${anoFrete}-${String(mesFrete).padStart(2, "0")}`;
@@ -1546,12 +1585,20 @@ export default function Fretes() {
         return String(anoFrete);
       }
       return "";
-    });
+    }).filter(Boolean);
+
+    const hoje = new Date();
+    let periodoAtual = "";
+    if (tipoVisualizacao === "mensal") periodoAtual = format(hoje, "yyyy-MM");
+    else if (tipoVisualizacao === "trimestral") periodoAtual = `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;
+    else if (tipoVisualizacao === "semestral") periodoAtual = `${hoje.getFullYear()}-S${hoje.getMonth() <= 5 ? 1 : 2}`;
+    else if (tipoVisualizacao === "anual") periodoAtual = String(hoje.getFullYear());
+
+    periodosConvertidos.push(periodoAtual);
 
     // Remover duplicatas e ordenar
-    const periodosUnicos = Array.from(new Set(periodos)).filter(Boolean).sort();
-    return periodosUnicos;
-  }, [fretesState, tipoVisualizacao]);
+    return Array.from(new Set<string>(periodosConvertidos)).sort();
+  }, [estatisticasResponse, tipoVisualizacao]);
 
   // Formatar label do período para exibição
   const formatPeriodoLabel = (periodo: string) => {
@@ -1955,12 +2002,12 @@ export default function Fretes() {
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Período</Label>
                 <Select value={selectedPeriodo} onValueChange={setSelectedPeriodo}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o período" />
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
                     {periodosDisponiveis.length === 0 ? (
-                      <SelectItem value="sem-dados" disabled>Nenhum dado disponível</SelectItem>
+                      <SelectItem value="sem-dados" disabled>Nenhum dado...</SelectItem>
                     ) : (
                       periodosDisponiveis.map((periodo) => (
                         <SelectItem key={periodo} value={periodo}>

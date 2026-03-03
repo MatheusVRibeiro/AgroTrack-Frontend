@@ -4,16 +4,32 @@ import type { CriarFretePayload } from "@/types";
 
 export const FRETES_QUERY_KEY = ["fretes"] as const;
 
-export function useFretes(params?: { page?: number; limit?: number; fetchAll?: boolean }) {
-  const page = params?.page ?? 1;
-  const limit = params?.limit ?? 50;
-  const fetchAll = params?.fetchAll ?? false;
+export function useEstatisticasFretes(params?: any) {
+  return useQuery({
+    queryKey: ["estatisticas-fretes", params],
+    queryFn: () => fretesService.obterEstatisticas(params),
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useFretes(params?: {
+  page?: number;
+  limit?: number;
+  fetchAll?: boolean;
+  data_inicio?: string;
+  data_fim?: string;
+  motorista_id?: string | number;
+  caminhao_id?: string | number;
+  fazenda_id?: string | number;
+  search?: string;
+}) {
+  const { page = 1, limit = 50, fetchAll = false, ...filtros } = params ?? {};
 
   return useQuery({
-    queryKey: fetchAll ? [...FRETES_QUERY_KEY, "all"] : [...FRETES_QUERY_KEY, page, limit],
+    queryKey: fetchAll ? [...FRETES_QUERY_KEY, "all", filtros] : [...FRETES_QUERY_KEY, page, limit, filtros],
     queryFn: async () => {
       if (!fetchAll) {
-        return fretesService.listarFretes({ page, limit });
+        return fretesService.listarFretes({ page, limit, ...filtros });
       }
 
       // Fetch all pages sequentially and concatenate results
@@ -23,7 +39,7 @@ export function useFretes(params?: { page?: number; limit?: number; fetchAll?: b
       let lastMeta: any = undefined;
 
       while (true) {
-        const res = await fretesService.listarFretes({ page: current, limit: perPage });
+        const res = await fretesService.listarFretes({ page: current, limit: perPage, ...filtros });
         if (!res.success) return res;
         const pageData = Array.isArray(res.data) ? res.data : [];
         allData = allData.concat(pageData);
