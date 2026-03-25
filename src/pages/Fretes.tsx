@@ -313,6 +313,7 @@ export default function Fretes() {
     dataFrete: string;
     toneladas: string;
     valorPorTonelada: string;
+    ticket: string;
   };
   const initialFormErrors: FormErrors = {
     fazendaId: "",
@@ -322,6 +323,7 @@ export default function Fretes() {
     dataFrete: "",
     toneladas: "",
     valorPorTonelada: "",
+    ticket: "",
   };
   const [formErrors, setFormErrors] = useState<FormErrors>(initialFormErrors);
   const resetFormErrors = () => {
@@ -334,6 +336,7 @@ export default function Fretes() {
     const fieldMap: Record<string, keyof FormErrors> = {
       motorista_id: "motoristaId",
       caminhao_id: "caminhaoId",
+      ticket: "ticket",
     };
     const mappedField = field ? fieldMap[field] : undefined;
     if (!mappedField) return false;

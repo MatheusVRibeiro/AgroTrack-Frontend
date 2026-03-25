@@ -34,6 +34,7 @@ interface FormErrors {
     dataFrete: string;
     toneladas: string;
     valorPorTonelada: string;
+    ticket: string;
 }
 
 interface FreteFormModalProps {
@@ -276,9 +277,14 @@ export function FreteFormModal({
                                     <Input
                                         id="ticket-frete"
                                         placeholder="0123"
+                                        className={cn(fieldErrorClass(formErrors.ticket))}
                                         value={newFrete.ticket}
-                                        onChange={(e) => setNewFrete({ ...newFrete, ticket: e.target.value })}
+                                        onChange={(e) => {
+                                            setNewFrete({ ...newFrete, ticket: e.target.value });
+                                            clearFormError("ticket");
+                                        }}
                                     />
+                                    <FieldError message={formErrors.ticket} />
                                 </div>
                                 {estoqueSelecionado?.estado === "MS" && (
                                     <div className="space-y-2">
