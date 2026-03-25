@@ -930,6 +930,7 @@ export default function Fretes() {
       dataFrete: "",
       toneladas: "",
       valorPorTonelada: "",
+      ticket: "",
     };
 
     if (isEmpty(newFrete.fazendaId) || !estoqueSelecionado) {
