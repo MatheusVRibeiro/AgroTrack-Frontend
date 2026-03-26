@@ -66,7 +66,7 @@ export function KPICard({ title, value, icon: Icon, trend, variant = "default", 
                   trend.isPositive ? "text-profit" : "text-loss"
                 )}
               >
-                {trend.isPositive ? "+" : ""}{trend.value}%
+                {trend.isPositive ? "+" : ""}{Number(trend.value).toFixed(1)}%
               </span>
               <span className="text-[10px] sm:text-xs text-muted-foreground">vs mês anterior</span>
             </div>

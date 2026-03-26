@@ -11,10 +11,10 @@ interface UsePeriodoFilterProps<T> {
 
 export function usePeriodoFilter<T>({ data, getDataField }: UsePeriodoFilterProps<T>) {
   const [tipoVisualizacao, setTipoVisualizacao] = useState<TipoVisualizacao>(() => {
-    return (localStorage.getItem("periodo_tipoVisualizacao") as TipoVisualizacao) || "mensal";
+    return (localStorage.getItem("periodo_tipoVisualizacao") as TipoVisualizacao) || "anual";
   });
   const [selectedPeriodo, setSelectedPeriodo] = useState(() => {
-    const salvo = localStorage.getItem("periodo_tipoVisualizacao") || "mensal";
+    const salvo = localStorage.getItem("periodo_tipoVisualizacao") || "anual";
     const hoje = new Date();
     if (salvo === "mensal") return format(hoje, "yyyy-MM");
     if (salvo === "trimestral") return `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;

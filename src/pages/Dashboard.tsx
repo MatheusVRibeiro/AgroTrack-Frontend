@@ -181,23 +181,30 @@ export default function Dashboard() {
     // Usar dados reais do backend ou fallback para simulados
     const fretesParaCalcular = fretes.length > 0 ? fretes : fretesSimulados;
     
-    // Filtrar fretes por data (Janeiro 2025 e Dezembro 2024)
+    // Filtrar fretes por data (Mês Atual e Mês Anterior)
     const hoje = new Date();
-    const mesAtual = hoje.getMonth(); // 0-11
+    const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
     
-    const fretesJaneiro = fretesParaCalcular.filter((f: FreteSimulado) => {
-      if (f.mes === "jan") return f.status !== "cancelado"; // Dados simulados
+    let mesAnterior = mesAtual - 1;
+    let anoAnterior = anoAtual;
+    if (mesAnterior < 0) {
+      mesAnterior = 11;
+      anoAnterior -= 1;
+    }
+    
+    const fretesMesAtual = fretesParaCalcular.filter((f: any) => {
+      if (f.mes === "jan") return f.status !== "cancelado"; // Fallback simulado
       if (!f.data_frete) return false;
       const dataFrete = new Date(f.data_frete);
-      return dataFrete.getMonth() === 0 && dataFrete.getFullYear() === 2025; // Janeiro 2025
+      return dataFrete.getMonth() === mesAtual && dataFrete.getFullYear() === anoAtual;
     });
     
-    const fretesDezembro = fretesParaCalcular.filter((f: FreteSimulado) => {
-      if (f.mes === "dez") return true; // Dados simulados
+    const fretesMesAnterior = fretesParaCalcular.filter((f: any) => {
+      if (f.mes === "dez") return true; // Fallback simulado
       if (!f.data_frete) return false;
       const dataFrete = new Date(f.data_frete);
-      return dataFrete.getMonth() === 11 && dataFrete.getFullYear() === 2024; // Dezembro 2024
+      return dataFrete.getMonth() === mesAnterior && dataFrete.getFullYear() === anoAnterior;
     });
     
     const fretesAtivos = fretesParaCalcular.filter((f: FreteSimulado) => {
@@ -220,29 +227,32 @@ export default function Dashboard() {
     const totalSacasHoje = fretesHoje.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.quantidadeSacas) || 0), 0);
     const totalToneladasHoje = totalSacasHoje * 25 / 1000; // Conversão de sacas para toneladas (25kg por saca)
     
-    // KPIs de Fretes (Janeiro / Atual)
-    const totalSacasJan = fretesJaneiro.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.quantidadeSacas) || 0), 0);
-    const totalReceitaJan = fretesJaneiro.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.receita) || 0), 0);
-    const totalCustosJan = fretesJaneiro.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.custos) || 0), 0);
-    const totalResultadoJan = totalReceitaJan - totalCustosJan;
+    // KPIs de Fretes (Mês Atual)
+    const totalSacasAtual = fretesMesAtual.reduce((acc: number, f: any) => acc + (Number(f.quantidade_sacas || f.quantidadeSacas) || 0), 0);
+    const totalReceitaAtual = fretesMesAtual.reduce((acc: number, f: any) => acc + (Number(f.receita) || 0), 0);
+    const totalCustosAtual = fretesMesAtual.reduce((acc: number, f: any) => acc + (Number(f.custos) || 0), 0);
+    const totalResultadoAtual = totalReceitaAtual - totalCustosAtual;
     
-    // KPIs de Fretes (Dezembro / Previous)
-    const totalSacasDez = fretesDezembro.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.quantidadeSacas) || 0), 0);
-    const totalReceitaDez = fretesDezembro.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.receita) || 0), 0);
-    const totalCustosDez = fretesDezembro.reduce((acc: number, f: FreteSimulado) => acc + (Number(f.custos) || 0), 0);
-    const totalResultadoDez = totalReceitaDez - totalCustosDez;
+    // KPIs de Fretes (Mês Anterior)
+    const totalSacasAnterior = fretesMesAnterior.reduce((acc: number, f: any) => acc + (Number(f.quantidade_sacas || f.quantidadeSacas) || 0), 0);
+    const totalReceitaAnterior = fretesMesAnterior.reduce((acc: number, f: any) => acc + (Number(f.receita) || 0), 0);
+    const totalCustosAnterior = fretesMesAnterior.reduce((acc: number, f: any) => acc + (Number(f.custos) || 0), 0);
+    const totalResultadoAnterior = totalReceitaAnterior - totalCustosAnterior;
     
-    // Custo médio por saca (apenas fretes concluídos com custo)
-    const fretesComCusto = fretesJaneiro.filter(f => (f.custos || 0) > 0);
-    const sacasComCusto = fretesComCusto.reduce((acc: number, f: FreteSimulado) => acc + (f.quantidadeSacas || 0), 0);
-    const custoPorSaca = sacasComCusto > 0 ? totalCustosJan / sacasComCusto : 0;
+    // Custo médio por saca (Mês Atual)
+    const fretesComCusto = fretesMesAtual.filter((f: any) => (Number(f.custos) || 0) > 0);
+    const sacasComCusto = fretesComCusto.reduce((acc: number, f: any) => acc + (Number(f.quantidade_sacas || f.quantidadeSacas) || 0), 0);
+    const custoPorSaca = sacasComCusto > 0 ? totalCustosAtual / sacasComCusto : 0;
     
-    const fretesComCustoDez = fretesDezembro.filter(f => (f.custos || 0) > 0);
-    const sacasComCustoDez = fretesComCustoDez.reduce((acc: number, f: FreteSimulado) => acc + (f.quantidadeSacas || 0), 0);
-    const custoPorSacaDez = sacasComCustoDez > 0 ? totalCustosDez / sacasComCustoDez : 0;
+    // Custo médio por saca (Mês Anterior)
+    const fretesComCustoAnterior = fretesMesAnterior.filter((f: any) => (Number(f.custos) || 0) > 0);
+    const sacasComCustoAnterior = fretesComCustoAnterior.reduce((acc: number, f: any) => acc + (Number(f.quantidade_sacas || f.quantidadeSacas) || 0), 0);
+    const custoPorSacaAnterior = sacasComCustoAnterior > 0 ? totalCustosAnterior / sacasComCustoAnterior : 0;
     
     // Taxa de ocupação da frota
-    const taxaOcupacao = (fretesAtivos / totalCaminhoes) * 100;
+    const motoristasAtivosUnicos = new Set(fretesMesAtual.map((f: any) => f.caminhao_placa || f.caminhao_id).filter(Boolean)).size;
+    const baseCaminhoes = (fretes.length > 0 && totalCaminhoes < motoristasAtivosUnicos) ? motoristasAtivosUnicos : totalCaminhoes;
+    const taxaOcupacao = Math.min((fretesAtivos / Math.max(1, baseCaminhoes)) * 100, 100);
     
     // KPIs de Estoques (Fazendas) - usando dados reais do backend
     const fazendaParaCalcular = fazendas.length > 0 ? fazendas : estoquesFazendas;
@@ -280,32 +290,36 @@ export default function Dashboard() {
     const fazendasCriticas = 0; // Será calculado se tiver dados de inicial
     
     // Calcular trends
-    const trendSacas = totalSacasDez > 0 ? ((totalSacasJan - totalSacasDez) / totalSacasDez) * 100 : 0;
-    const trendCustoPorSaca = custoPorSacaDez > 0 ? ((custoPorSaca - custoPorSacaDez) / custoPorSacaDez) * 100 : 0;
-    const trendResultado = totalResultadoDez > 0 ? ((totalResultadoJan - totalResultadoDez) / totalResultadoDez) * 100 : 0;
+    const trendSacas = totalSacasAnterior > 0 ? ((totalSacasAtual - totalSacasAnterior) / totalSacasAnterior) * 100 : 0;
+    const trendCustoPorSaca = custoPorSacaAnterior > 0 ? ((custoPorSaca - custoPorSacaAnterior) / custoPorSacaAnterior) * 100 : 0;
+    const trendResultado = totalResultadoAnterior > 0 ? ((totalResultadoAtual - totalResultadoAnterior) / totalResultadoAnterior) * 100 : 0;
     const trendEstoque = 0; // Sem dados iniciais para calcular trend
     
     return {
+      mesAtualIndex: mesAtual,
+      mesAnteriorIndex: mesAnterior,
+      anoAtual,
+      anoAnterior,
       hoje: {
         totalFretes: totalFretesHoje,
         totalSacas: totalSacasHoje,
         totalToneladas: totalToneladasHoje,
       },
-      janeiro: {
+      atual: {
         fretesAtivos,
-        totalSacas: totalSacasJan,
-        totalReceita: totalReceitaJan,
-        totalCustos: totalCustosJan,
-        totalResultado: totalResultadoJan,
+        totalSacas: totalSacasAtual,
+        totalReceita: totalReceitaAtual,
+        totalCustos: totalCustosAtual,
+        totalResultado: totalResultadoAtual,
         custoPorSaca,
         taxaOcupacao,
       },
-      dezembro: {
-        totalSacas: totalSacasDez,
-        totalReceita: totalReceitaDez,
-        totalCustos: totalCustosDez,
-        totalResultado: totalResultadoDez,
-        custoPorSaca: custoPorSacaDez,
+      anterior: {
+        totalSacas: totalSacasAnterior,
+        totalReceita: totalReceitaAnterior,
+        totalCustos: totalCustosAnterior,
+        totalResultado: totalResultadoAnterior,
+        custoPorSaca: custoPorSacaAnterior,
       },
       estoques: {
         totalSacas: totalEstoquesSacas,
@@ -313,7 +327,7 @@ export default function Dashboard() {
         totalValor: totalEstoquesValor,
         fazendaAtivas,
         fazendasCriticas,
-        percentualConsumido: ((totalEstoquesSacasInicial - totalEstoquesSacas) / totalEstoquesSacasInicial) * 100,
+        percentualConsumido: totalEstoquesSacasInicial > 0 ? ((totalEstoquesSacasInicial - totalEstoquesSacas) / totalEstoquesSacasInicial) * 100 : 0,
       },
       trends: {
         sacas: trendSacas,
@@ -324,38 +338,57 @@ export default function Dashboard() {
     };
   }, [estoquesFazendas, fazendas, fretes]);
 
+  const formatMesNome = (mIndex: number) => {
+    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return meses[mIndex];
+  };
+
   const monthlyData = {
     mesAtual: {
-      receita: kpisIntegrados.janeiro.totalReceita,
-      custos: kpisIntegrados.janeiro.totalCustos,
-      resultado: kpisIntegrados.janeiro.totalResultado,
+      receita: kpisIntegrados.atual.totalReceita,
+      custos: kpisIntegrados.atual.totalCustos,
+      resultado: kpisIntegrados.atual.totalResultado,
     },
     mesAnterior: {
-      receita: kpisIntegrados.dezembro.totalReceita,
-      custos: kpisIntegrados.dezembro.totalCustos,
-      resultado: kpisIntegrados.dezembro.totalResultado,
+      receita: kpisIntegrados.anterior.totalReceita,
+      custos: kpisIntegrados.anterior.totalCustos,
+      resultado: kpisIntegrados.anterior.totalResultado,
     },
   };
 
-  // Dados para gráfico de Receita vs Custos (últimos 6 meses)
-  const revenueChartData = [
-    { month: "Ago", receita: 185000, custos: 142000 },
-    { month: "Set", receita: 198000, custos: 155000 },
-    { month: "Out", receita: 220000, custos: 168000 },
-    { month: "Nov", receita: 245000, custos: 175000 },
-    { month: "Dez", receita: kpisIntegrados.dezembro.totalReceita, custos: kpisIntegrados.dezembro.totalCustos },
-    { month: "Jan", receita: kpisIntegrados.janeiro.totalReceita, custos: kpisIntegrados.janeiro.totalCustos },
-  ];
+  // Montar 6 meses passados dinamicamente para o Chart
+  const last6Months = Array.from({ length: 6 }).map((_, i) => {
+    let m = kpisIntegrados.mesAtualIndex - 5 + i;
+    let y = kpisIntegrados.anoAtual;
+    if (m < 0) {
+      m += 12;
+      y -= 1;
+    }
+    return { name: `${formatMesNome(m)}`, mesIndex: m, ano: y };
+  });
 
-  // Dados para gráfico de Lucro Mensal (últimos 6 meses)
-  const profitChartData = [
-    { month: "Ago", lucro: 43000 },
-    { month: "Set", lucro: 43000 },
-    { month: "Out", lucro: 52000 },
-    { month: "Nov", lucro: 70000 },
-    { month: "Dez", lucro: kpisIntegrados.dezembro.totalResultado },
-    { month: "Jan", lucro: kpisIntegrados.janeiro.totalResultado },
-  ];
+  const getEstatisticasMes = (mes: number, ano: number) => {
+    const fretesNoMes = fretes.filter((f: any) => {
+      if (!f.data_frete) return false;
+      const d = new Date(f.data_frete);
+      return d.getMonth() === mes && d.getFullYear() === ano;
+    });
+    return {
+      receita: fretesNoMes.reduce((acc, f) => acc + (Number(f.receita) || 0), 0),
+      custos: fretesNoMes.reduce((acc, f) => acc + (Number(f.custos) || 0), 0),
+      resultado: fretesNoMes.reduce((acc, f) => acc + ((Number(f.receita) || 0) - (Number(f.custos) || 0)), 0),
+    };
+  };
+
+  const revenueChartData = last6Months.map(lm => {
+    const stat = getEstatisticasMes(lm.mesIndex, lm.ano);
+    return { month: lm.name, receita: stat.receita, custos: stat.custos };
+  });
+
+  const profitChartData = last6Months.map(lm => {
+    const stat = getEstatisticasMes(lm.mesIndex, lm.ano);
+    return { month: lm.name, lucro: stat.resultado };
+  });
 
   // Calcular ranking de favorecidos/proprietários por receita
   const driversRanking = useMemo(() => {
@@ -399,43 +432,58 @@ export default function Dashboard() {
     return "normal";
   };
 
-  // Dados para gráfico de sacas transportadas (últimos 6 meses)
-  const dadosSacasMensais = [
-    { mes: "Ago/24", sacas: 2100, meta: 2500 },
-    { mes: "Set/24", sacas: 2350, meta: 2500 },
-    { mes: "Out/24", sacas: 2200, meta: 2500 },
-    { mes: "Nov/24", sacas: 1950, meta: 2500 },
-    { mes: "Dez/24", sacas: kpisIntegrados.dezembro.totalSacas, meta: 2500 },
-    { mes: "Jan/25", sacas: kpisIntegrados.janeiro.totalSacas, meta: 2500 },
-  ];
+  // Função para pegar estatística dinâmica dos meses
+  const getEstatisticaEspecifica = (mes: number, ano: number) => {
+    const fretesNoMes = fretes.filter((f: any) => {
+      if (!f.data_frete) return false;
+      const d = new Date(f.data_frete);
+      return d.getMonth() === mes && d.getFullYear() === ano;
+    });
 
-  // Dados para gráfico de taxa de ocupação (últimas 4 semanas)
+    const sacas = fretesNoMes.reduce((acc, f) => acc + (Number(f.quantidade_sacas || (f as any).quantidadeSacas) || 0), 0);
+    const receita = fretesNoMes.reduce((acc, f) => acc + (Number(f.receita) || 0), 0);
+    const custos = fretesNoMes.reduce((acc, f) => acc + (Number(f.custos) || 0), 0);
+    const resultado = receita - custos;
+    
+    const fretesComCusto = fretesNoMes.filter(f => (Number(f.custos) || 0) > 0);
+    const sacasCusto = fretesComCusto.reduce((acc, f) => acc + (Number(f.quantidade_sacas || (f as any).quantidadeSacas) || 0), 0);
+    const custoPorSaca = sacasCusto > 0 ? (custos / sacasCusto) : 0;
+
+    return { sacas, receita, custos, resultado, custoPorSaca };
+  };
+
+  const dadosSacasMensais = last6Months.map(lm => {
+    const st = getEstatisticaEspecifica(lm.mesIndex, lm.ano);
+    return { mes: `${lm.name}/${String(lm.ano).substring(2)}`, sacas: st.sacas, meta: 2500 };
+  });
+
   const dadosOcupacaoSemanal = [
     { semana: "Semana 1", ocupacao: 80, disponivel: 20 },
     { semana: "Semana 2", ocupacao: 60, disponivel: 40 },
     { semana: "Semana 3", ocupacao: 100, disponivel: 0 },
-    { semana: "Semana 4", ocupacao: kpisIntegrados.janeiro.taxaOcupacao, disponivel: 100 - kpisIntegrados.janeiro.taxaOcupacao },
+    { semana: "Semana Atual", ocupacao: kpisIntegrados.atual.taxaOcupacao, disponivel: 100 - kpisIntegrados.atual.taxaOcupacao },
   ];
 
-  // Dados para gráfico de custo por saca (últimos 6 meses)
-  const dadosCustoMensal = [
-    { mes: "Ago/24", custoPorSaca: 3.20, combustivel: 2.10, motorista: 0.90, manutencao: 0.20 },
-    { mes: "Set/24", custoPorSaca: 3.35, combustivel: 2.20, motorista: 0.95, manutencao: 0.20 },
-    { mes: "Out/24", custoPorSaca: 3.50, combustivel: 2.30, motorista: 1.00, manutencao: 0.20 },
-    { mes: "Nov/24", custoPorSaca: 3.70, combustivel: 2.50, motorista: 1.00, manutencao: 0.20 },
-    { mes: "Dez/24", custoPorSaca: kpisIntegrados.dezembro.custoPorSaca, combustivel: 2.60, motorista: 1.05, manutencao: 0.20 },
-    { mes: "Jan/25", custoPorSaca: kpisIntegrados.janeiro.custoPorSaca, combustivel: 2.70, motorista: 1.00, manutencao: 0.15 },
-  ];
+  const dadosCustoMensal = last6Months.map(lm => {
+    const st = getEstatisticaEspecifica(lm.mesIndex, lm.ano);
+    return { 
+      mes: `${lm.name}/${String(lm.ano).substring(2)}`, 
+      custoPorSaca: st.custoPorSaca, 
+      combustivel: st.custoPorSaca * 0.7, 
+      motorista: st.custoPorSaca * 0.26, 
+      manutencao: st.custoPorSaca * 0.04 
+    };
+  });
 
-  // Dados para gráfico de resultado mensal (últimos 6 meses)
-  const dadosResultadoMensal = [
-    { mes: "Ago/24", receita: 31500, custos: 8400, lucro: 23100 },
-    { mes: "Set/24", receita: 35250, custos: 7875, lucro: 27375 },
-    { mes: "Out/24", receita: 33000, custos: 7700, lucro: 25300 },
-    { mes: "Nov/24", receita: 29250, custos: 7215, lucro: 22035 },
-    { mes: "Dez/24", receita: kpisIntegrados.dezembro.totalReceita, custos: kpisIntegrados.dezembro.totalCustos, lucro: kpisIntegrados.dezembro.totalResultado },
-    { mes: "Jan/25", receita: kpisIntegrados.janeiro.totalReceita, custos: kpisIntegrados.janeiro.totalCustos, lucro: kpisIntegrados.janeiro.totalResultado },
-  ];
+  const dadosResultadoMensal = last6Months.map(lm => {
+    const st = getEstatisticaEspecifica(lm.mesIndex, lm.ano);
+    return { 
+      mes: `${lm.name}/${String(lm.ano).substring(2)}`, 
+      receita: st.receita, 
+      custos: st.custos, 
+      lucro: st.resultado 
+    };
+  });
 
   return (
     <MainLayout
@@ -544,38 +592,38 @@ export default function Dashboard() {
         />
         <KPICard
           title="Taxa de Ocupação"
-          value={`${(Number(kpisIntegrados.janeiro.taxaOcupacao || 0)).toFixed(0)}%`}
+          value={`${(Number(kpisIntegrados.atual.taxaOcupacao || 0)).toFixed(0)}%`}
           icon={Truck}
           variant="active"
           trend={{
-            value: 5,
+            value: 0,
             isPositive: true,
           }}
-          tooltip={`${Number(kpisIntegrados.janeiro.fretesAtivos || 0)} de ${totalCaminhoes} caminhões atualmente em uso. ${totalCaminhoes - Number(kpisIntegrados.janeiro.fretesAtivos || 0)} disponíveis. Clique para ver histórico`}
+          tooltip={`Caminhões ativos nesse mês. Clique para ver histórico`}
           onClick={() => setModalAberto("ocupacao")}
         />
         <KPICard
           title="Custo por Saca"
-          value={`R$ ${(Number(kpisIntegrados.janeiro.custoPorSaca || 0)).toFixed(2)}`}
+          value={`R$ ${(Number(kpisIntegrados.atual.custoPorSaca || 0)).toFixed(2)}`}
           icon={DollarSign}
           variant="loss"
           trend={{
             value: Math.abs(Number(kpisIntegrados.trends.custoPorSaca || 0)),
             isPositive: (Number(kpisIntegrados.trends.custoPorSaca || 0)) <= 0,
           }}
-          tooltip="Custo médio por saca transportada (combustível + motorista + manutenção). Clique para ver breakdown"
+          tooltip="Custo médio por saca transportada (combustível + pedágio). Clique para ver breakdown"
           onClick={() => setModalAberto("custos")}
         />
         <KPICard
           title="Resultado do Mês"
-          value={`R$ ${((Number(kpisIntegrados.janeiro.totalResultado || 0)) / 1000).toFixed(1)}k`}
+          value={`R$ ${((Number(kpisIntegrados.atual.totalResultado || 0)) / 1000).toFixed(1)}k`}
           icon={TrendingUp}
           variant="profit"
           trend={{
             value: Math.abs(Number(kpisIntegrados.trends.resultado || 0)),
             isPositive: (Number(kpisIntegrados.trends.resultado || 0)) >= 0,
           }}
-          tooltip={`Receita R$ ${((Number(kpisIntegrados.janeiro.totalReceita || 0)) / 1000).toFixed(0)}k - Custos R$ ${((Number(kpisIntegrados.janeiro.totalCustos || 0)) / 1000).toFixed(0)}k = Lucro R$ ${((Number(kpisIntegrados.janeiro.totalResultado || 0)) / 1000).toFixed(1)}k. Clique para análise detalhada`}
+          tooltip={`Receita R$ ${((Number(kpisIntegrados.atual.totalReceita || 0)) / 1000).toFixed(0)}k - Custos R$ ${((Number(kpisIntegrados.atual.totalCustos || 0)) / 1000).toFixed(0)}k = Lucro R$ ${((Number(kpisIntegrados.atual.totalResultado || 0)) / 1000).toFixed(1)}k. Clique para análise detalhada`}
           onClick={() => setModalAberto("resultado")}
         />
       </div>
@@ -637,8 +685,8 @@ export default function Dashboard() {
         <MonthlyComparison
           mesAtual={monthlyData.mesAtual}
           mesAnterior={monthlyData.mesAnterior}
-          labelMesAtual="Jan/2025"
-          labelMesAnterior="Dez/2024"
+          labelMesAtual={`${formatMesNome(kpisIntegrados.mesAtualIndex)}/${kpisIntegrados.anoAtual}`}
+          labelMesAnterior={`${formatMesNome(kpisIntegrados.mesAnteriorIndex)}/${kpisIntegrados.anoAnterior}`}
         />
         <SmartAlerts alerts={alerts} onDismiss={handleDismissAlert} />
       </div>
@@ -709,9 +757,9 @@ export default function Dashboard() {
             <div className="p-4 bg-muted/50 rounded-lg space-y-2">
               <h4 className="font-semibold">📊 Análise</h4>
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>• Janeiro atingiu {((kpisIntegrados.janeiro.totalSacas / 2500) * 100).toFixed(1)}% da meta mensal</li>
-                <li>• Crescimento de {kpisIntegrados.trends.sacas.toFixed(1)}% em relação a Dezembro</li>
-                <li>• Equivalente a {(kpisIntegrados.janeiro.totalSacas * 25 / 1000).toFixed(1)} toneladas transportadas</li>
+                <li>• O mês atual atingiu {((kpisIntegrados.atual.totalSacas / 2500) * 100).toFixed(1)}% da meta mensal</li>
+                <li>• Variação de {kpisIntegrados.trends.sacas.toFixed(1)}% em relação ao mês anterior</li>
+                <li>• Equivalente a {(kpisIntegrados.atual.totalSacas * 25 / 1000).toFixed(1)} toneladas transportadas no mês atual</li>
                 <li>• Estoques de fazendas: {kpisIntegrados.estoques.totalSacas.toLocaleString("pt-BR")} sacas disponíveis</li>
               </ul>
             </div>
@@ -734,7 +782,7 @@ export default function Dashboard() {
               <div className="p-4 bg-loss/5 rounded-lg border border-loss/20">
                 <p className="text-sm text-muted-foreground">Custo Atual</p>
                 <p className="text-2xl font-bold text-loss">
-                  R$ {kpisIntegrados.janeiro.custoPorSaca.toFixed(2)}
+                  R$ {kpisIntegrados.atual.custoPorSaca.toFixed(2)}
                 </p>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg">
@@ -802,10 +850,9 @@ export default function Dashboard() {
             <div className="p-4 bg-muted/50 rounded-lg space-y-2">
               <h4 className="font-semibold">💰 Análise de Custos</h4>
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>• Custo médio dos últimos 6 meses: R$ {(dadosCustoMensal.reduce((acc, d) => acc + d.custoPorSaca, 0) / 6).toFixed(2)}/saca</li>
-                <li>• Combustível representa 70% do custo total - principal fator de variação</li>
-                <li>• Aumento de {kpisIntegrados.trends.custoPorSaca.toFixed(1)}% em relação a Dezembro</li>
-                <li>• Recomendação: Otimizar rotas para reduzir consumo de combustível</li>
+                <li>• Custo médio dos últimos 6 meses: R$ {(dadosCustoMensal.reduce((acc, d) => acc + d.custoPorSaca, 0) / Math.max(1, dadosCustoMensal.length)).toFixed(2)}/saca</li>
+                <li>• Variação de {kpisIntegrados.trends.custoPorSaca.toFixed(1)}% em relação ao mês anterior</li>
+                <li>• Custos influenciam diretamente a margem líquida da frota</li>
               </ul>
             </div>
           </div>
@@ -827,19 +874,19 @@ export default function Dashboard() {
               <div className="p-4 bg-active/10 rounded-lg border border-active/20">
                 <p className="text-sm text-muted-foreground">Ocupação Atual</p>
                 <p className="text-2xl font-bold text-active">
-                  {kpisIntegrados.janeiro.taxaOcupacao.toFixed(0)}%
+                  {kpisIntegrados.atual.taxaOcupacao.toFixed(0)}%
                 </p>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground">Caminhões Ativos</p>
                 <p className="text-2xl font-bold">
-                  {kpisIntegrados.janeiro.fretesAtivos} / {totalCaminhoes}
+                  {kpisIntegrados.atual.fretesAtivos} / {totalCaminhoes}
                 </p>
               </div>
               <div className="p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground">Disponíveis</p>
                 <p className="text-2xl font-bold">
-                  {totalCaminhoes - kpisIntegrados.janeiro.fretesAtivos} caminhões
+                  {Math.max(0, totalCaminhoes - kpisIntegrados.atual.fretesAtivos)} caminhões
                 </p>
               </div>
             </div>
@@ -888,8 +935,8 @@ export default function Dashboard() {
               <ul className="text-sm space-y-1 text-muted-foreground">
                 <li>• Ocupação média do mês: {dadosOcupacaoSemanal.reduce((acc, d) => acc + d.ocupacao, 0) / 4}%</li>
                 <li>• Pico de ocupação na Semana 3 (100% da frota utilizada)</li>
-                <li>• {totalCaminhoes - kpisIntegrados.janeiro.fretesAtivos} caminhões disponíveis para novos fretes</li>
-                <li>• Recomendação: {kpisIntegrados.janeiro.taxaOcupacao > 80 ? "Considerar expansão da frota" : "Capacidade adequada para demanda atual"}</li>
+                <li>• {Math.max(0, totalCaminhoes - kpisIntegrados.atual.fretesAtivos)} caminhões disponíveis para novos fretes</li>
+                <li>• Recomendação: {kpisIntegrados.atual.taxaOcupacao > 80 ? "Considerar expansão da frota" : "Capacidade adequada para demanda atual"}</li>
               </ul>
             </div>
           </div>
@@ -909,21 +956,21 @@ export default function Dashboard() {
             {/* Estatísticas Rápidas */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-                <p className="text-sm text-muted-foreground">Receita Jan/25</p>
+                <p className="text-sm text-muted-foreground">Receita Atual</p>
                 <p className="text-2xl font-bold text-primary">
-                  R$ {(kpisIntegrados.janeiro.totalReceita / 1000).toFixed(1)}k
+                  R$ {(kpisIntegrados.atual.totalReceita / 1000).toFixed(1)}k
                 </p>
               </div>
               <div className="p-4 bg-loss/5 rounded-lg border border-loss/20">
-                <p className="text-sm text-muted-foreground">Custos Jan/25</p>
+                <p className="text-sm text-muted-foreground">Custos Atuais</p>
                 <p className="text-2xl font-bold text-loss">
-                  R$ {(kpisIntegrados.janeiro.totalCustos / 1000).toFixed(1)}k
+                  R$ {(kpisIntegrados.atual.totalCustos / 1000).toFixed(1)}k
                 </p>
               </div>
               <div className="p-4 bg-profit/5 rounded-lg border border-profit/20">
-                <p className="text-sm text-muted-foreground">Lucro Jan/25</p>
+                <p className="text-sm text-muted-foreground">Lucro Atual</p>
                 <p className="text-2xl font-bold text-profit">
-                  R$ {(kpisIntegrados.janeiro.totalResultado / 1000).toFixed(1)}k
+                  R$ {(kpisIntegrados.atual.totalResultado / 1000).toFixed(1)}k
                 </p>
               </div>
             </div>
@@ -956,9 +1003,9 @@ export default function Dashboard() {
               <h4 className="font-semibold">📊 Análise Financeira</h4>
               <ul className="text-sm space-y-1 text-muted-foreground">
                 <li>• Lucro total dos últimos 6 meses: R$ {(dadosResultadoMensal.reduce((acc, d) => acc + d.lucro, 0) / 1000).toFixed(1)}k</li>
-                <li>• Margem de lucro em Janeiro: {((kpisIntegrados.janeiro.totalResultado / kpisIntegrados.janeiro.totalReceita) * 100).toFixed(1)}%</li>
-                <li>• Crescimento de {kpisIntegrados.trends.resultado.toFixed(1)}% no resultado vs. mês anterior</li>
-                <li>• Melhor mês: Set/24 com R$ 27,4k de lucro líquido</li>
+                <li>• Margem de lucro mensal: {kpisIntegrados.atual.totalReceita > 0 ? ((kpisIntegrados.atual.totalResultado / kpisIntegrados.atual.totalReceita) * 100).toFixed(1) : 0}%</li>
+                <li>• Variação de {kpisIntegrados.trends.resultado.toFixed(1)}% no resultado vs. mês anterior</li>
+                <li>• Gráfico refletindo fluxo de caixa real das viagens</li>
               </ul>
             </div>
           </div>

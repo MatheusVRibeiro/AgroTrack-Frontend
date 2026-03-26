@@ -116,6 +116,8 @@ export default function Fazendas() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedProducao, setSelectedProducao] = useState<Fazenda | null>(null);
+  const [confirmarFinalizacaoModal, setConfirmarFinalizacaoModal] = useState<Fazenda | null>(null);
+  const [confirmarReaberturaModal, setConfirmarReaberturaModal] = useState<Fazenda | null>(null);
   const [originalProducao, setOriginalProducao] = useState<Fazenda | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -424,153 +426,191 @@ export default function Fazendas() {
     const doc = new jsPDF();
 
     // ==================== CABEÇALHO ====================
-    doc.setFillColor(37, 99, 235);
-    doc.rect(0, 0, 210, 32, "F");
+    doc.setFillColor(37, 99, 235); // Azul primário
+    doc.rect(0, 0, 210, 35, "F");
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
+    doc.setFontSize(18);
     doc.setTextColor(255, 255, 255);
-    doc.text("Transportadora Transcontelli", 14, 18);
+    doc.text("Relatório Gerencial de Produção", 14, 20);
 
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Relatório de Colheita", 14, 25);
+    doc.text("Transcontelli Logística e Fretes", 14, 28);
 
     doc.setFontSize(9);
-    doc.text(`Emitido em ${new Date().toLocaleDateString("pt-BR")}`, 165, 18, { align: "right" });
-
-    // ==================== IDENTIFICAÇÃO ====================
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(16);
+    doc.text(`Emitido em ${new Date().toLocaleDateString("pt-BR")}`, 196, 20, { align: "right" });
+    
+    // Status visual
+    const statusLabel = fazenda.colheita_finalizada ? "FINALIZADA" : "EM ANDAMENTO";
+    doc.setFillColor(fazenda.colheita_finalizada ? 22 : 234, fazenda.colheita_finalizada ? 163 : 179, fazenda.colheita_finalizada ? 74 : 8);
+    doc.roundedRect(166, 24, 30, 6, 1, 1, "F");
+    doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
-    doc.text(fazenda.fazenda, 14, 46);
+    doc.text(statusLabel, 181, 28, { align: "center" });
 
+    // ==================== IDENTIFICAÇÃO DA ORIGEM ====================
+    let y = 45;
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Informações da Origem", 14, y);
+
+    y += 5;
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(14, 50, 182, 20, 2, 2, "F");
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(14, 50, 182, 20, 2, 2, "S");
+    doc.roundedRect(14, y, 182, 24, 2, 2, "FD");
 
     doc.setFontSize(9);
     doc.setTextColor(71, 85, 105);
+    
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.text("Fazenda:", 18, y);
+    doc.setFont("helvetica", "bold"); doc.text(fazenda.fazenda, 35, y);
+    
+    doc.setFont("helvetica", "normal"); doc.text("Proprietário:", 100, y);
+    doc.setFont("helvetica", "bold"); doc.text(fazenda.proprietario || "-", 122, y);
+
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.text("Estado:", 18, y);
+    doc.setFont("helvetica", "bold"); doc.text(fazenda.estado || "-", 31, y);
+
+    doc.setFont("helvetica", "normal"); doc.text("Produto:", 100, y);
+    doc.setFont("helvetica", "bold"); doc.text(`${fazenda.mercadoria || "-"} ${fazenda.variedade ? `(${fazenda.variedade})` : ""}`, 115, y);
+
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.text("Safra:", 18, y);
+    doc.setFont("helvetica", "bold"); doc.text(fazenda.safra || "-", 29, y);
+
+    // ==================== VOLUMETRIA (CARDS) ====================
+    y += 18;
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("Estado:", 18, 58);
-    doc.setFont("helvetica", "normal");
-    doc.text(fazenda.estado || "-", 42, 58);
+    doc.text("Desempenho de Volumetria", 14, y);
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Proprietário:", 120, 58);
-    doc.setFont("helvetica", "normal");
-    doc.text(fazenda.proprietario, 146, 58);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Safra:", 18, 66);
-    doc.setFont("helvetica", "normal");
-    doc.text(fazenda.safra, 32, 66);
-
-    // Status em badge
-    const statusLabel = fazenda.colheita_finalizada ? "COLHEITA FINALIZADA" : "COLHEITA EM ANDAMENTO";
-    doc.setFillColor(fazenda.colheita_finalizada ? 37 : 59, fazenda.colheita_finalizada ? 99 : 130, fazenda.colheita_finalizada ? 235 : 246);
-    doc.roundedRect(145, 40, 50, 9, 2, 2, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.text(statusLabel, 170, 46, { align: "center" });
-
-    doc.setTextColor(0, 0, 0);
-
-    // ==================== RESUMO ====================
-    const precoPorSaca = ((fazenda.preco_por_tonelada ?? 0) * (fazenda.peso_medio_saca ?? 25)) / 1000;
-    const faturamentoPorTon = (fazenda.total_toneladas ?? 0) > 0
-      ? (fazenda.faturamento_total ?? 0) / (fazenda.total_toneladas ?? 1)
-      : 0;
-
-    let y = 75;
-
-    const card = (
-      x: number,
-      title: string,
-      value: string,
-      color: [number, number, number],
-      fill: [number, number, number]
-    ) => {
-      doc.setFillColor(fill[0], fill[1], fill[2]);
-      doc.roundedRect(x, y, 58, 26, 2, 2, "F");
-      doc.setDrawColor(color[0], color[1], color[2]);
-      doc.roundedRect(x, y, 58, 26, 2, 2, "S");
+    y += 6;
+    const renderCard = (x: number, title: string, value: string, subtitle: string, rgbColor: number[]) => {
+      doc.setFillColor(rgbColor[0], rgbColor[1], rgbColor[2]);
+      doc.roundedRect(x, y, 58, 22, 2, 2, "F");
+      
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text(title, x + 4, y + 7);
-      doc.setFontSize(12);
-      doc.setTextColor(color[0], color[1], color[2]);
-      doc.text(value, x + 4, y + 17);
-      doc.setTextColor(0, 0, 0);
+      doc.setTextColor(100, 116, 139);
+      doc.text(title, x + 4, y + 6);
+      
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59);
+      doc.text(value, x + 4, y + 14);
+
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text(subtitle, x + 4, y + 19);
     };
 
-    card(
-      14,
-      "Sacas carregadas",
-      (fazenda.total_sacas_carregadas ?? 0).toLocaleString("pt-BR"),
-      [37, 99, 235],
-      [239, 246, 255]
-    );
-    card(
-      76,
-      "Toneladas",
-      (fazenda.total_toneladas ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
-      [30, 64, 175],
-      [224, 231, 255]
-    );
-    card(
-      138,
-      "Faturamento",
-      `R$ ${(fazenda.faturamento_total ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+    renderCard(14, "SACAS TRANSPORTADAS", (fazenda.total_sacas_carregadas ?? 0).toLocaleString("pt-BR"), "unidades", [239, 246, 255]); // Azul
+    renderCard(76, "PESO TOTAL", (fazenda.total_toneladas ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }), "toneladas", [250, 232, 255]); // Roxo
+    renderCard(138, "FRETES REALIZADOS", (fazenda.total_fretes_realizados ?? 0).toString(), "viagens executadas", [241, 245, 249]); // Cinza
 
-      [22, 163, 74],
-      [220, 252, 231]
-    );
-
-    y += 36;
-
-    // ==================== DETALHES ====================
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(14, y - 6, 182, 44, 2, 2, "F");
-    doc.setDrawColor(191, 219, 254);
-    doc.roundedRect(14, y - 6, 182, 44, 2, 2, "S");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
+    // ==================== RESULTADO FINANCEIRO (DRE) ====================
+    y += 34;
     doc.setTextColor(30, 41, 59);
-    doc.text("Detalhes da Produção", 18, y);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Análise Financeira (DRE)", 14, y);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
+    y += 5;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(14, y, 182, 34, 2, 2, "FD");
+
+    const receita = toNumber(fazenda.faturamento_total);
+    const custos = toNumber(fazenda.total_custos_operacionais);
+    const lucro = toNumber(fazenda.lucro_liquido) || (receita - custos);
+    const margem = receita > 0 ? (lucro / receita) * 100 : 0;
+
     y += 8;
-    doc.setFont("helvetica", "bold");
-    doc.text("Último frete:", 18, y);
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
     doc.setFont("helvetica", "normal");
-    doc.text(fazenda.ultimo_frete ?? "Não realizado", 50, y);
-    y += 6;
+    doc.text("Faturamento Líquido (Receita):", 18, y);
     doc.setFont("helvetica", "bold");
-    doc.text("Preço por tonelada:", 18, y);
+    doc.setTextColor(22, 163, 74); // Verde
+    doc.text(`R$ ${receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 190, y, { align: "right" });
+
+    y += 7;
+    doc.setTextColor(71, 85, 105);
     doc.setFont("helvetica", "normal");
-    doc.text(`R$ ${(fazenda.preco_por_tonelada ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 60, y);
-    y += 6;
+    doc.text("(-) Custos Operacionais da Viagem:", 18, y);
     doc.setFont("helvetica", "bold");
-    doc.text("Preço por saca:", 18, y);
+    doc.setTextColor(220, 38, 38); // Vermelho
+    doc.text(`R$ ${custos.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 190, y, { align: "right" });
+
+    y += 4;
+    doc.setDrawColor(226, 232, 240);
+    doc.line(18, y, 192, y); // Row separator
+
+    y += 7;
+    doc.setTextColor(30, 41, 59);
     doc.setFont("helvetica", "normal");
-    doc.text(`R$ ${precoPorSaca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 52, y);
-    y += 6;
+    doc.text("(=) Resultado (Lucro Líquido):", 18, y);
     doc.setFont("helvetica", "bold");
-    doc.text("Peso médio por saca:", 18, y);
+    doc.setTextColor(lucro >= 0 ? 22 : 220, lucro >= 0 ? 163 : 38, lucro >= 0 ? 74 : 38);
+    doc.text(`R$ ${lucro.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 190, y, { align: "right" });
+
+    y += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
     doc.setFont("helvetica", "normal");
-    doc.text(`${fazenda.peso_medio_saca ?? 25}kg`, 64, y);
-    y += 6;
+    doc.text(`Margem de Lucro: ${margem.toFixed(2)}%`, 190, y, { align: "right" });
+
+    // ==================== DETALHES DE PRECIFICAÇÃO ====================
+    y += 14;
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("Faturamento por tonelada:", 18, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(`R$ ${faturamentoPorTon.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`, 78, y);
+    doc.text("Precificação e Margens/Saca", 14, y);
+
+    y += 5;
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, y, 182, 26, 2, 2, "FD");
+
+    const precoPorSaca = ((fazenda.preco_por_tonelada ?? 0) * (fazenda.peso_medio_saca ?? 25)) / 1000;
+    const lucroPorSaca = (fazenda.total_sacas_carregadas ?? 0) > 0 ? (lucro / fazenda.total_sacas_carregadas!) : 0;
+
+    y += 8;
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.setFont("helvetica", "normal"); doc.text("Preço Base / Tonelada:", 18, y);
+    doc.setFont("helvetica", "bold"); doc.text(`R$ ${(fazenda.preco_por_tonelada ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 53, y);
+    
+    doc.setFont("helvetica", "normal"); doc.text("Faturamento Base / Ton.:", 100, y);
+    doc.setFont("helvetica", "bold"); doc.text(`R$ ${(receita / (fazenda.total_toneladas || 1)).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} / ton`, 140, y);
+
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.text("Receita Bruta / Saca:", 18, y);
+    doc.setFont("helvetica", "bold"); doc.text(`R$ ${precoPorSaca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 53, y);
+
+    doc.setFont("helvetica", "bold"); doc.text("LUCRO LÍQUIDO / SACA:", 100, y);
+    doc.setTextColor(22, 163, 74); // Green
+    doc.setFont("helvetica", "bold"); doc.text(`R$ ${lucroPorSaca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 140, y);
+    doc.setTextColor(71, 85, 105); // volta
+    
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.text("Peso Padrão / Saca:", 18, y);
+    doc.setFont("helvetica", "bold"); doc.text(`${fazenda.peso_medio_saca ?? 25} kg`, 52, y);
+
+    doc.setFont("helvetica", "normal"); doc.text("Último Frete Realizado:", 100, y);
+    let ultimoFreteTxt = "-";
+    if (fazenda.ultimo_frete_data) {
+        ultimoFreteTxt = `${new Date(fazenda.ultimo_frete_data).toLocaleDateString("pt-BR")} ${fazenda.ultimo_frete_motorista ? `(${fazenda.ultimo_frete_motorista})` : ""}`;
+    } else if (fazenda.ultimo_frete) {
+        ultimoFreteTxt = fazenda.ultimo_frete;
+    }
+    doc.setFont("helvetica", "bold"); doc.text(ultimoFreteTxt, 137, y);
+
 
     // ==================== RODAPÉ ====================
     doc.setDrawColor(203, 213, 225);
@@ -578,17 +618,17 @@ export default function Fazendas() {
     doc.line(14, 285, 196, 285);
     doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
-    doc.text("Sistema de gestão de fretes", 14, 288);
-    doc.text("Pagina 1 de 1", 105, 288, { align: "center" });
-    doc.text("Relatorio Confidencial", 196, 288, { align: "right" });
+    doc.text("Transcontelli Logística", 14, 288);
+    doc.text("Página 1 de 1", 105, 288, { align: "center" });
+    doc.text("Documento Gerencial Interno", 196, 288, { align: "right" });
 
     doc.setFontSize(6);
     doc.setTextColor(148, 163, 184);
-    doc.text("Este documento foi gerado automaticamente e contem informacoes confidenciais", 105, 292, { align: "center" });
+    doc.text("Este relatório foi gerado automaticamente e contém informações e faturamentos confidenciais da operação.", 105, 292, { align: "center" });
 
-    const nomeArquivo = `Relatorio_Producao_Transcontelli_${fazenda.fazenda.replace(/\s+/g, "_")}.pdf`;
+    const nomeArquivo = `DRE_Producao_Transcontelli_${fazenda.fazenda.replace(/\s+/g, "_")}.pdf`;
     doc.save(nomeArquivo);
-    toast.success(`PDF "${nomeArquivo}" gerado com sucesso!`);
+    toast.success(`Relatório Gerencial "${nomeArquivo}" exportado com sucesso!`);
   };
 
   return (
@@ -954,7 +994,7 @@ export default function Fazendas() {
                                 </div>
                               </div>
                               {fazenda.colheita_finalizada ? (
-                                <Badge className="bg-emerald-600 text-white shadow-sm">
+                                <Badge className="bg-red-600 hover:bg-red-700 text-white shadow-sm border-0">
                                   <CheckCircle2 className="h-3 w-3 mr-1" />
                                   Finalizada
                                 </Badge>
@@ -1735,9 +1775,15 @@ export default function Fazendas() {
             {selectedProducao && (
               <Button
                 variant={selectedProducao.colheita_finalizada ? "outline" : "default"}
-                onClick={() => handleToggleColheitaFinalizada(selectedProducao.id)}
+                onClick={() => {
+                  if (selectedProducao.colheita_finalizada) {
+                    setConfirmarReaberturaModal(selectedProducao);
+                  } else {
+                    setConfirmarFinalizacaoModal(selectedProducao);
+                  }
+                }}
                 size="lg"
-                className="gap-2"
+                className={`gap-2 ${!selectedProducao.colheita_finalizada ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md border-0" : "border-amber-500 text-amber-600 hover:bg-amber-50 hover:text-amber-700"}`}
               >
                 <CheckCircle2 className="h-4 w-4" />
                 {selectedProducao.colheita_finalizada ? "Reabrir Colheita" : "Finalizar Colheita"}
@@ -1752,6 +1798,79 @@ export default function Fazendas() {
             >
               <Edit className="h-4 w-4 mr-2" />
               Editar Fazenda
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Confirmar Finalizar Colheita */}
+      <Dialog open={!!confirmarFinalizacaoModal} onOpenChange={() => setConfirmarFinalizacaoModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 className="h-6 w-6" />
+              Confirmar Encerramento
+            </DialogTitle>
+            <DialogDescription className="py-2 text-base">
+              Tem certeza que deseja marcar a colheita da <strong>{confirmarFinalizacaoModal?.fazenda}</strong> como finalizada?
+            </DialogDescription>
+            <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+              Ao confirmar e finalizar:
+              <ul className="list-disc pl-5 mt-1">
+                <li>A fazenda será ocultada da lista de colheitas ativas.</li>
+                <li>Haverá um selo verde "FINALIZADA" na exportação PDF.</li>
+                <li>Você ainda poderá reabrí-la no futuro, caso necessite de aditivos.</li>
+              </ul>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setConfirmarFinalizacaoModal(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                if (confirmarFinalizacaoModal) {
+                  handleToggleColheitaFinalizada(confirmarFinalizacaoModal.id);
+                  setConfirmarFinalizacaoModal(null);
+                }
+              }}
+            >
+              Sim, Finalizar Colheita
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Confirmar Reabertura Colheita */}
+      <Dialog open={!!confirmarReaberturaModal} onOpenChange={() => setConfirmarReaberturaModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertCircle className="h-6 w-6" />
+              Reabrir Colheita
+            </DialogTitle>
+            <DialogDescription className="py-2 text-base">
+              Você deseja reabrir a colheita da <strong>{confirmarReaberturaModal?.fazenda}</strong> e ativar novos lançamentos?
+            </DialogDescription>
+            <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+              Ao confirmar e reabrir, a fazenda voltará a constar como "Ativa" no sistema, removendo o status de fechada e permitindo novos faturamentos e medições.
+            </p>
+          </DialogHeader>
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setConfirmarReaberturaModal(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                if (confirmarReaberturaModal) {
+                  handleToggleColheitaFinalizada(confirmarReaberturaModal.id);
+                  setConfirmarReaberturaModal(null);
+                }
+              }}
+            >
+              Sim, Reabrir Colheita
             </Button>
           </DialogFooter>
         </DialogContent>
