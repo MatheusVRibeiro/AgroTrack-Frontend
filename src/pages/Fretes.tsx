@@ -61,7 +61,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, MapPin, ArrowRight, Truck, Package, DollarSign, TrendingUp, Edit, Save, X, Weight, Info, Calendar as CalendarIcon, Fuel, Wrench, AlertCircle, FileDown, FileText, Filter } from "lucide-react";
+import { Plus, MapPin, ArrowRight, Truck, Package, DollarSign, TrendingUp, Edit, Save, X, Weight, Info, Calendar as CalendarIcon, Fuel, Wrench, AlertCircle, FileDown, FileText, Filter, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { sortMotoristasPorNome, sortFazendasPorNome } from "@/lib/sortHelpers";
@@ -70,6 +70,7 @@ import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { FreteFormModal } from "@/components/fretes/FreteFormModal";
 import { FreteDetailsModal } from "@/components/fretes/FreteDetailsModal";
 import { FretesTable } from "@/components/fretes/FretesTable";
+import { BatchFreteFormModal } from "@/components/fretes/BatchFreteFormModal";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { useShake } from "@/hooks/useShake";
 import { format } from "date-fns";
@@ -265,6 +266,7 @@ export default function Fretes() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const [isNewFreteOpen, setIsNewFreteOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isEditingFrete, setIsEditingFrete] = useState(false);
   const [isSavingFrete, setIsSavingFrete] = useState(false);
 
@@ -736,6 +738,46 @@ export default function Fretes() {
     } finally {
       setCarregandoCaminhoes(false);
     }
+  };
+
+  /**
+   * loadCaminhoesForBatch: Returns trucks for a given motorista.
+   * Used by BatchFreteFormModal to keep truck-loading logic in one place.
+   */
+  const loadCaminhoesForBatch = async (motoristaId: string): Promise<any[]> => {
+    try {
+      const res = await caminhoesService.listarPorMotorista(motoristaId);
+      if (res.success && res.data) return res.data;
+      return [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handleOpenBatchModal = async () => {
+    // Reload fazendas so the batch modal has fresh stock data
+    const res = await fazendasService.listarFazendas();
+    if (res.success && res.data) {
+      const { sortFazendasPorNome } = await import("@/lib/sortHelpers");
+      const formatted = res.data
+        .filter((f) => !f.colheita_finalizada)
+        .map((f) => ({
+          id: f.id,
+          fazendaId: f.id,
+          fazenda: f.fazenda,
+          estado: f.estado || "",
+          mercadoria: f.mercadoria,
+          variedade: f.variedade || "",
+          quantidadeSacas: f.total_sacas_carregadas || 0,
+          quantidadeInicial: f.total_sacas_carregadas || 0,
+          precoPorTonelada: f.preco_por_tonelada || 0,
+          pesoMedioSaca: f.peso_medio_saca || 25,
+          safra: f.safra || "",
+          colheitaFinalizada: f.colheita_finalizada || false,
+        }));
+      setEstoquesFazendas(sortFazendasPorNome(formatted));
+    }
+    setIsBatchModalOpen(true);
   };
 
   // Buscar caminhões do motorista selecionado
@@ -1826,6 +1868,12 @@ export default function Fretes() {
               Exportar PDF
             </Button>
 
+            {/* Botão Lançamento em Lote */}
+            <Button variant="outline" onClick={handleOpenBatchModal} className="gap-2">
+              <Layers className="h-4 w-4" />
+              Lançar em Lote
+            </Button>
+
             {/* Botão Novo Frete */}
             <Button onClick={handleOpenNewModal}>
               <Plus className="h-4 w-4 mr-2" />
@@ -2259,6 +2307,20 @@ export default function Fretes() {
         handleMotoristaChange={handleMotoristaChange}
         handleSaveFrete={handleSaveFrete}
         onClose={() => setIsNewFreteOpen(false)}
+      />
+
+      {/* Batch Frete Modal */}
+      <BatchFreteFormModal
+        isOpen={isBatchModalOpen}
+        estoquesFazendas={estoquesFazendas}
+        motoristasState={motoristasState}
+        caminhoesState={caminhoesState}
+        onClose={() => setIsBatchModalOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["fretes"] });
+          queryClient.invalidateQueries({ queryKey: ["fazendas"] });
+        }}
+        onLoadCaminhoes={loadCaminhoesForBatch}
       />
     </MainLayout>
   );
