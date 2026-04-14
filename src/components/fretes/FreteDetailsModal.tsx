@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
     Package, MapPin, Truck, ArrowRight, Info, FileText,
-    DollarSign, TrendingUp, AlertCircle, Edit
+    DollarSign, TrendingUp, AlertCircle, Edit, Trash2
 } from "lucide-react";
-import { DeleteConfirmation } from "@/components/shared/DeleteConfirmation";
+import { useState, useEffect } from "react";
 
 import { useDeletarFrete } from "@/hooks/queries/useFretes";
 import { toast } from "sonner";
@@ -32,8 +32,14 @@ export function FreteDetailsModal({
     handleOpenEditModal
 }: FreteDetailsModalProps) {
 
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const deleteMutation = useDeletarFrete();
     const queryClient = useQueryClient();
+
+    // Resetar confirmação ao trocar de frete ou fechar o modal
+    useEffect(() => {
+        setShowDeleteConfirm(false);
+    }, [selectedFrete]);
 
     const handleDelete = async () => {
         if (!selectedFrete) return;
@@ -77,8 +83,8 @@ export function FreteDetailsModal({
     if (!selectedFrete) return null;
 
     return (
-        <Dialog open={!!selectedFrete} onOpenChange={() => setSelectedFrete(null)}>
-            <DialogContent className="max-w-3xl">
+        <Dialog open={!!selectedFrete} onOpenChange={(open) => { if (!open) { setShowDeleteConfirm(false); setSelectedFrete(null); } }}>
+            <DialogContent className={showDeleteConfirm ? "max-w-lg" : "max-w-3xl"}>
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle className="flex items-center gap-2">
@@ -87,29 +93,60 @@ export function FreteDetailsModal({
                             </div>
                             Frete {selectedFrete ? formatFreteCodigo(selectedFrete) : ""}
                         </DialogTitle>
+                        {!showDeleteConfirm && (
+                            <div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleOpenEditModal}
+                                    className="gap-2 mr-3"
+                                >
+                                    <Edit className="h-4 w-4" />
+                                    Editar
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Excluir
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </DialogHeader>
+
+                {/* Confirmação inline — sem overlay extra */}
+                {showDeleteConfirm ? (
+                    <div className="flex flex-col gap-4 py-2">
                         <div>
+                            <h3 className="text-base font-semibold">Confirmar exclusão</h3>
+                            <p className="mt-1.5 text-sm text-muted-foreground">
+                                Tem certeza que deseja excluir &quot;{formatFreteCodigo(selectedFrete)}&quot;? Esta ação não pode ser desfeita.
+                            </p>
+                        </div>
+                        <div className="flex justify-center gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={handleOpenEditModal}
-                                className="gap-2 mr-3"
+                                onClick={() => setShowDeleteConfirm(false)}
                             >
-                                <Edit className="h-4 w-4" />
-                                Editar
+                                Cancelar
                             </Button>
-                            <DeleteConfirmation
-                                itemName={formatFreteCodigo(selectedFrete)}
-                                onConfirm={handleDelete}
-                                trigger={
-                                    <Button variant="destructive" size="sm" className="gap-2">
-                                        Excluir
-                                    </Button>
-                                }
-                            />
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={handleDelete}
+                                disabled={deleteMutation.isPending}
+                            >
+                                {deleteMutation.isPending ? "Excluindo..." : "Sim, excluir"}
+                            </Button>
                         </div>
                     </div>
-                </DialogHeader>
-                <div className="max-h-[calc(90vh-200px)] overflow-y-auto space-y-6 px-1">
+                ) : (
+                    <div className="max-h-[calc(90vh-200px)] overflow-y-auto space-y-6 px-1">
                     {/* Route Info */}
                     <Card className="p-6 bg-gradient-to-br from-primary/5 to-transparent border-l-4 border-l-primary">
                         <div className="flex items-center gap-4 flex-wrap">
@@ -312,7 +349,8 @@ export function FreteDetailsModal({
                             );
                         })()}
                     </div>
-                </div>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );

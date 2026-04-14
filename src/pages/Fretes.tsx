@@ -70,6 +70,7 @@ import { RefreshingIndicator } from "@/components/shared/RefreshingIndicator";
 import { FreteFormModal } from "@/components/fretes/FreteFormModal";
 import { FreteDetailsModal } from "@/components/fretes/FreteDetailsModal";
 import { FretesTable } from "@/components/fretes/FretesTable";
+import { FreteLoteModal } from "@/components/fretes/FreteLoteModal";
 import { useRefreshData } from "@/hooks/useRefreshData";
 import { useShake } from "@/hooks/useShake";
 import { format } from "date-fns";
@@ -270,6 +271,7 @@ export default function Fretes() {
   const [isNewFreteOpen, setIsNewFreteOpen] = useState(false);
   const [isEditingFrete, setIsEditingFrete] = useState(false);
   const [isSavingFrete, setIsSavingFrete] = useState(false);
+  const [isLoteOpen, setIsLoteOpen] = useState(false);
 
   const [newFrete, setNewFrete] = useState({
     id: "",
@@ -1728,6 +1730,31 @@ export default function Fretes() {
               Exportar PDF
             </Button>
 
+            {/* Botão Lançar em Lote */}
+            <Button variant="outline" onClick={async () => {
+              const res = await fazendasService.listarFazendas();
+              if (res.success && res.data) {
+                const formatted = res.data
+                  .filter((f) => !f.colheita_finalizada)
+                  .map((f) => ({
+                    id: f.id, fazendaId: f.id, fazenda: f.fazenda,
+                    estado: f.estado || "", mercadoria: f.mercadoria,
+                    variedade: f.variedade || "",
+                    quantidadeSacas: f.total_sacas_carregadas || 0,
+                    quantidadeInicial: f.total_sacas_carregadas || 0,
+                    precoPorTonelada: f.preco_por_tonelada || 0,
+                    pesoMedioSaca: f.peso_medio_saca || 25,
+                    safra: f.safra || "",
+                    colheitaFinalizada: f.colheita_finalizada || false,
+                  }));
+                setEstoquesFazendas(formatted);
+              }
+              setIsLoteOpen(true);
+            }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Lançar em Lote
+            </Button>
+
             {/* Botão Novo Frete */}
             <Button onClick={handleOpenNewModal}>
               <Plus className="h-4 w-4 mr-2" />
@@ -2173,6 +2200,118 @@ export default function Fretes() {
         handleMotoristaChange={handleMotoristaChange}
         handleSaveFrete={handleSaveFrete}
         onClose={() => setIsNewFreteOpen(false)}
+      />
+
+      {/* Lançar Fretes em Lote Modal */}
+      <FreteLoteModal
+        isOpen={isLoteOpen}
+        onClose={() => setIsLoteOpen(false)}
+        estoquesFazendas={estoquesFazendas}
+        motoristasState={motoristasState}
+        caminhoesState={caminhoesState}
+        isSaving={isSavingFrete}
+        onSubmitLote={async ({ motoristaId, caminhaoId, fretes: loteFretes }) => {
+          // Carregar fazendas se ainda não foram carregadas
+          if (estoquesFazendas.length === 0) {
+            const res = await fazendasService.listarFazendas();
+            if (res.success && res.data) {
+              const formatted = res.data
+                .filter((f) => !f.colheita_finalizada)
+                .map((f) => ({
+                  id: f.id, fazendaId: f.id, fazenda: f.fazenda,
+                  estado: f.estado || "", mercadoria: f.mercadoria,
+                  variedade: f.variedade || "", quantidadeSacas: f.total_sacas_carregadas || 0,
+                  quantidadeInicial: f.total_sacas_carregadas || 0,
+                  precoPorTonelada: f.preco_por_tonelada || 0,
+                  pesoMedioSaca: f.peso_medio_saca || 25, safra: f.safra || "",
+                  colheitaFinalizada: f.colheita_finalizada || false,
+                }));
+              setEstoquesFazendas(formatted);
+            }
+          }
+
+          const motorista = motoristasState.find((m) => String(m.id) === String(motoristaId));
+          const caminhao =
+            caminhoesState.find((c) => String(c.id) === String(caminhaoId)) ||
+            (await import("@/services/caminhoes").then(async (svc) => {
+              const r = await svc.default.listarPorMotorista(motoristaId);
+              return r.data?.find((c: any) => String(c.id) === String(caminhaoId));
+            }));
+
+          if (!motorista || !caminhao) {
+            toast.error("Motorista ou caminhão não encontrado");
+            return;
+          }
+
+          setIsSavingFrete(true);
+          startRefresh();
+          let sucessos = 0;
+          let falhas = 0;
+
+          for (let i = 0; i < loteFretes.length; i++) {
+            const item = loteFretes[i];
+            const est = item.estoqueSelecionado;
+            const quantidadeSacas = Math.round((item.toneladas * 1000) / est.pesoMedioSaca);
+            const toUpper = (v: string) => v.trim().toUpperCase();
+            const toUpperOpt = (v?: string) => (v?.trim() ? v.trim().toUpperCase() : undefined);
+
+            const payload = {
+              origem: toUpper(`${est.fazenda} - ${est.estado}`),
+              destino: toUpper(item.destino),
+              motorista_id: String(motorista.id),
+              motorista_nome: toUpper(motorista.nome),
+              caminhao_id: String(caminhao.id),
+              caminhao_placa: toUpper(caminhao.placa),
+              fazenda_id: String(est.fazendaId || est.id),
+              fazenda_nome: toUpper(est.fazenda),
+              mercadoria: toUpper(est.mercadoria),
+              mercadoria_id: String(est.id),
+              variedade: toUpperOpt(est.variedade),
+              data_frete: item.dataFrete || getTodayInputDate(),
+              quantidade_sacas: quantidadeSacas,
+              toneladas: item.toneladas,
+              valor_por_tonelada: item.valorPorTonelada,
+              custos: 0,
+              resultado: item.toneladas * item.valorPorTonelada,
+              ticket: item.ticket || null,
+              numero_nota_fiscal: item.numeroNotaFiscal || null,
+            };
+
+            const toastId = toast.loading(`📦 Lançando frete ${i + 1}/${loteFretes.length}...`);
+            const res = await fretesService.criarFrete(payload);
+            toast.dismiss(toastId);
+
+            if (res.success) {
+              sucessos++;
+              // Incrementar volume da fazenda
+              if (est.fazendaId || est.id) {
+                await fazendasService.incrementarVolumeTransportado(
+                  String(est.fazendaId || est.id),
+                  item.toneladas,
+                  quantidadeSacas,
+                  item.toneladas * item.valorPorTonelada
+                );
+              }
+            } else {
+              falhas++;
+              toast.error(`❌ Frete ${i + 1} falhou: ${res.message || "Erro desconhecido"}`);
+            }
+          }
+
+          queryClient.invalidateQueries({ queryKey: ["fretes"] });
+          queryClient.invalidateQueries({ queryKey: ["fazendas"] });
+          setIsSavingFrete(false);
+          endRefresh();
+
+          if (sucessos > 0) {
+            toast.success(`✅ ${sucessos} frete${sucessos > 1 ? "s" : ""} lançado${sucessos > 1 ? "s" : ""} com sucesso!`, {
+              description: falhas > 0 ? `${falhas} falharam` : undefined,
+              duration: 4000,
+            });
+          }
+
+          if (falhas === 0) setIsLoteOpen(false);
+        }}
       />
     </MainLayout>
   );
