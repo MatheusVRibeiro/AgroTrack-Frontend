@@ -314,7 +314,7 @@ function FreteCard({
                   if (!date) return;
                   update({ dataFrete: format(date, "yyyy-MM-dd"), errors: { ...item.errors, dataFrete: "" } });
                 }}
-                disabledDays={(date) => date > new Date()}
+                disabled={(date) => date > new Date()}
                 buttonClassName={cn(fieldErrorClass(item.errors.dataFrete))}
               />
               <FieldError message={item.errors.dataFrete} />

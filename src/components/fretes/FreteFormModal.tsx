@@ -264,7 +264,7 @@ export function FreteFormModal({
                                         onOpenChange={(open) => {
                                             if (open) clearFormError("dataFrete");
                                         }}
-                                        disabledDays={(date) => date > new Date()}
+                                        disabled={(date) => date > new Date()}
                                         buttonClassName={cn(fieldErrorClass(formErrors.dataFrete))}
                                     />
                                     <FieldError message={formErrors.dataFrete} />
