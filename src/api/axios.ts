@@ -1,11 +1,18 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from "axios";
-import { clearSessionStorage, SESSION_EXPIRED_MESSAGE, STORAGE_KEYS } from "@/auth/session";
+import {
+  clearSessionStorage,
+  SESSION_EXPIRED_MESSAGE,
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setTokens,
+} from "@/auth/session";
 import * as authService from "@/services/auth";
 import { toast } from "sonner";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "https://api.caramellologistica.com",
-
+  withCredentials: true, // Envia cookies HttpOnly automaticamente
   headers: {
     "Content-Type": "application/json",
   },
@@ -42,7 +49,8 @@ const shouldSkipRefresh = (config?: InternalAxiosRequestConfig) => {
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(STORAGE_KEYS.accessToken);
+    // Lê o token da memória (não mais do localStorage)
+    const token = getAccessToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -84,7 +92,8 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const storedRefreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken);
+    // Lê o refresh token da memória (não mais do localStorage)
+    const storedRefreshToken = getRefreshToken();
     if (!storedRefreshToken) {
       redirectToLoginAfterSessionExpiration();
       return Promise.reject(error);
@@ -100,9 +109,11 @@ api.interceptors.response.use(
             throw new Error(res.message || SESSION_EXPIRED_MESSAGE);
           }
 
-          localStorage.setItem(STORAGE_KEYS.accessToken, res.data.token);
+          // Armazena os novos tokens na memória
           if (res.data.refreshToken) {
-            localStorage.setItem(STORAGE_KEYS.refreshToken, res.data.refreshToken);
+            setTokens(res.data.token, res.data.refreshToken);
+          } else {
+            setAccessToken(res.data.token);
           }
           return res.data.token;
         })

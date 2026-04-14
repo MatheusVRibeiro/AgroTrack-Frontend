@@ -2,12 +2,23 @@ import api from "@/api/axios";
 import { isAxiosError } from "axios";
 import type { ApiResponse, Caminhao, CriarCaminhaoPayload } from "@/types";
 
-export async function listarCaminhoes(params?: { page?: number; limit?: number }): Promise<ApiResponse<Caminhao[]>> {
+export interface CaminhoesQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  proprietario_tipo?: string;
+}
+
+export async function listarCaminhoes(params?: CaminhoesQueryParams): Promise<ApiResponse<Caminhao[]>> {
   try {
-    const { page = 1, limit = 50 } = params ?? {};
-    const res = await api.get("/frota", { params: { page, limit } });
-    // Backend retorna {success, message, data: [...]}
-    // Então res.data.data contém o array de caminhões
+    const { page = 1, limit = 50, ...filtros } = params ?? {};
+    
+    const filtrosLimpos = Object.fromEntries(
+      Object.entries(filtros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
+    );
+
+    const res = await api.get("/frota", { params: { page, limit, ...filtrosLimpos } });
     return { success: true, data: res.data.data || res.data, meta: res.data.meta, status: res.status };
   } catch (err: unknown) {
     let message = "Erro ao listar caminhões";

@@ -1,10 +1,26 @@
-export type Role = "admin" | "operador" | "motorista";
+export type Role = "admin" | "contabilidade" | "operador" | "motorista";
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: Role;
+}
+
+export interface Usuario {
+  id: string;
+  codigo_usuario?: string;
+  nome: string;
+  email: string;
+  role: Role;
+  ativo: boolean | number;
+  telefone?: string | null;
+  documento?: string | null;
+  ultimo_acesso?: string | null;
+  bloqueado_ate?: string | null;
+  tentativas_login_falhas?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Caminhao {

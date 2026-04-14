@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { forgotPassword } from "@/services/auth";
+import { sanitizeEmail } from "@/lib/sanitize";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Email inválido").min(1, "Email é obrigatório"),
@@ -37,7 +38,7 @@ export default function ForgotPassword() {
   useEffect(() => {
     const savedEmail = localStorage.getItem("@CaramelloLogistica:savedEmail");
     if (savedEmail) {
-      setValue("email", savedEmail);
+      setValue("email", sanitizeEmail(savedEmail));
     }
   }, [setValue]);
 

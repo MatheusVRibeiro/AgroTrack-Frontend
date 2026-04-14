@@ -73,11 +73,21 @@ export default function Fazendas() {
   };
 
   const opcoesSafra = gerarOpcoesSafra();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+  const [search, setSearch] = useState("");
 
-  // Query para listar fazendas
-  const { data: fazendasResponse, isLoading } = useFazendas();
+  // Query para listar fazendas - server-side
+  const { data: fazendasResponse, isLoading } = useFazendas({ 
+    page: currentPage, 
+    limit: itemsPerPage, 
+    search 
+  });
 
   const fazendas: Fazenda[] = fazendasResponse?.data || [];
+  const serverMeta = fazendasResponse?.meta as any;
+  const totalFromServer = serverMeta?.total ?? fazendas.length;
+  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
 
   // Hook para filtro de período (usa created_at ou data_atualizacao)
   const {
@@ -112,7 +122,6 @@ export default function Fazendas() {
   // Hook para refresh de dados após mutações
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
-  const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedProducao, setSelectedProducao] = useState<Fazenda | null>(null);
@@ -324,18 +333,7 @@ export default function Fazendas() {
     }
   };
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
-
-  const filteredData = sortFazendasPorNome(
-    fazendas.filter(
-      (p) =>
-        p.fazenda.toLowerCase().includes(search.toLowerCase()) ||
-        p.mercadoria.toLowerCase().includes(search.toLowerCase()) ||
-        (p.variedade?.toLowerCase() || "").includes(search.toLowerCase()) ||
-        (p.proprietario?.toLowerCase() || "").includes(search.toLowerCase())
-    )
-  ).sort((a, b) => {
+  const filteredData = sortFazendasPorNome(fazendas).sort((a, b) => {
     // Fazendas com atividade (sendo consumidas) primeiro
     const aAtiva = (a.total_sacas_carregadas || 0) > 0 || (a.total_toneladas || 0) > 0;
     const bAtiva = (b.total_sacas_carregadas || 0) > 0 || (b.total_toneladas || 0) > 0;
@@ -345,10 +343,9 @@ export default function Fazendas() {
     return a.fazenda.localeCompare(b.fazenda, "pt-BR", { sensitivity: "base" });
   });
 
-  // Lógica de paginação
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+  // Lógica de paginação - O servidor já traz a página
+  const totalPages = totalPagesFromServer;
+  const paginatedData = filteredData;
 
   // Resetar para página 1 quando aplicar novos filtros
   useEffect(() => {
@@ -1119,7 +1116,7 @@ export default function Fazendas() {
                       </Button>
                     </div>
                     <p className="text-xs text-center text-muted-foreground">
-                      {filteredData.length} registros
+                      {totalFromServer} registros
                     </p>
                   </div>
 
@@ -1197,7 +1194,7 @@ export default function Fazendas() {
           </div>
 
           {/* Empty State */}
-          {filteredData.length === 0 && (
+          {totalFromServer === 0 && (
             <Card className="p-12">
               <div className="text-center space-y-4">
                 <div className="h-16 w-16 rounded-full bg-muted mx-auto flex items-center justify-center">

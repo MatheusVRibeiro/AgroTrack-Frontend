@@ -4,13 +4,26 @@ import type { ApiResponse, Motorista } from "@/types";
 
 export const MOTORISTAS_QUERY_KEY = ["motoristas"] as const;
 
-export function useMotoristas(params?: { page?: number; limit?: number }) {
-  const page = params?.page ?? 1;
-  const limit = params?.limit ?? 50;
+export interface MotoristasQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  tipo?: string;
+}
+
+export function useMotoristas(params?: MotoristasQueryParams) {
+  const { page = 1, limit = 50, ...filtros } = params ?? {};
+
+  const filtrosLimpos = Object.fromEntries(
+    Object.entries(filtros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
+  );
+
   return useQuery({
-    queryKey: [...MOTORISTAS_QUERY_KEY, page, limit],
-    queryFn: () => motoristasService.listarMotoristas({ page, limit }),
+    queryKey: [...MOTORISTAS_QUERY_KEY, page, limit, filtrosLimpos],
+    queryFn: () => motoristasService.listarMotoristas({ page, limit, ...filtrosLimpos }),
     staleTime: 1000 * 60 * 5,
+    placeholderData: (prev) => prev,
   });
 }
 

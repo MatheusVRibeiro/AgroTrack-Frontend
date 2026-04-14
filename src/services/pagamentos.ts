@@ -2,10 +2,13 @@ import api from "@/api/axios";
 import { isAxiosError } from "axios";
 import type { ApiResponse, Pagamento, CriarPagamentoPayload, AtualizarPagamentoPayload } from "@/types";
 
-const listarPagamentos = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Pagamento[]>> => {
+const listarPagamentos = async (params?: Record<string, any>): Promise<ApiResponse<Pagamento[]>> => {
   try {
-    const { page = 1, limit = 50 } = params ?? {};
-    const res = await api.get("/pagamentos", { params: { page, limit } });
+    const { page = 1, limit = 50, ...outros } = params ?? {};
+    const filtrosLimpos = Object.fromEntries(
+      Object.entries(outros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
+    );
+    const res = await api.get("/pagamentos", { params: { page, limit, ...filtrosLimpos } });
     return { success: true, data: res.data.data || res.data, meta: res.data.meta, status: res.status };
   } catch (err: unknown) {
     let message = "Erro ao listar pagamentos";

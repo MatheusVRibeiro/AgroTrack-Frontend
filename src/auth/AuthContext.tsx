@@ -1,7 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import * as authService from "@/services/auth";
-import { clearSessionStorage, STORAGE_KEYS } from "@/auth/session";
+import {
+  clearSessionStorage,
+  setTokens,
+  setUserData,
+  getUserData,
+  migrateFromLocalStorage,
+} from "@/auth/session";
 import type { ApiResponse, User } from "@/types";
 
 interface AuthContextType {
@@ -14,22 +20,23 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// (demo users removed) 
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for stored session on mount
-    const storedUser = localStorage.getItem(STORAGE_KEYS.user);
-    
+    // Migra tokens antigos do localStorage (limpeza de segurança)
+    migrateFromLocalStorage();
+
+    // Obtém dados do usuário do sessionStorage (não-sensível)
+    const storedUser = getUserData<User>();
+
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        setUser(storedUser);
       } catch {
-        localStorage.removeItem(STORAGE_KEYS.user);
+        clearSessionStorage();
       }
     }
     setIsLoading(false);
@@ -46,9 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { user, token } = res.data;
 
         setUser(user);
-        localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
-        if (token) localStorage.setItem(STORAGE_KEYS.accessToken, token);
-        if (res.data.refreshToken) localStorage.setItem(STORAGE_KEYS.refreshToken, res.data.refreshToken);
+
+        // Armazena dados do usuário no sessionStorage (não-sensível)
+        setUserData(user);
+
+        // Armazena tokens APENAS em memória (seguro contra XSS)
+        if (token) {
+          setTokens(token, res.data.refreshToken);
+        }
 
         setIsLoading(false);
         return res;

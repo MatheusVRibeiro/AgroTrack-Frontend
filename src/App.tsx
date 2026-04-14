@@ -24,6 +24,7 @@ const Custos = lazy(() => import("./pages/Custos"));
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const Indicadores = lazy(() => import("./pages/Indicadores"));
 const Pagamentos = lazy(() => import("./pages/Pagamentos"));
+const Usuarios = lazy(() => import("./pages/Usuarios"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -88,6 +89,8 @@ const App = () => (
                         <Route path="/pagamentos/editar/:id" element={<ProtectedRoute><Pagamentos /></ProtectedRoute>} />
                         <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
                         <Route path="/indicadores" element={<ProtectedRoute><Indicadores /></ProtectedRoute>} />
+                        <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
+                        <Route path="/usuarios/editar/:id" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </Suspense>

@@ -13,6 +13,7 @@ import { SESSION_EXPIRED_MESSAGE } from "@/auth/session";
 import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
 import { cn } from "@/lib/utils";
 import { useShake } from "@/hooks/useShake";
+import { sanitizeEmail } from "@/lib/sanitize";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -49,7 +50,7 @@ export default function Login() {
   useEffect(() => {
     const savedEmail = localStorage.getItem("@CaramelloLogistica:savedEmail");
     if (savedEmail) {
-      setEmail(savedEmail);
+      setEmail(sanitizeEmail(savedEmail));
       setRememberMe(true);
     }
   }, []);
@@ -82,9 +83,9 @@ export default function Login() {
 
     if (res.success) {
       toast.success("✅ Login realizado com sucesso!", { description: "Bem-vindo de volta!", duration: 3000 });
-      // store normalized email when remembering
+      // store normalized email when remembering (não-sensível, apenas conveniência)
       if (rememberMe) {
-        localStorage.setItem("@CaramelloLogistica:savedEmail", normalizedEmail);
+        localStorage.setItem("@CaramelloLogistica:savedEmail", sanitizeEmail(normalizedEmail));
       } else {
         localStorage.removeItem("@CaramelloLogistica:savedEmail");
       }

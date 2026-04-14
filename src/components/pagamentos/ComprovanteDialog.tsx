@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import { safeOpenUrl, isSafeUrl, sanitizeLabel } from "@/lib/sanitize";
 
 interface ComprovanteDialogProps {
     comprovanteDialog: {
@@ -18,6 +19,9 @@ export function ComprovanteDialog({
 }: ComprovanteDialogProps) {
     if (!comprovanteDialog) return null;
 
+    const safeNome = sanitizeLabel(comprovanteDialog.nome, 100);
+    const urlSegura = isSafeUrl(comprovanteDialog.url);
+
     return (
         <Dialog
             open={!!comprovanteDialog}
@@ -33,18 +37,23 @@ export function ComprovanteDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">{comprovanteDialog.nome}</p>
-                    {comprovanteDialog.isImage ? (
+                    <p className="text-sm text-muted-foreground">{safeNome}</p>
+                    {!urlSegura ? (
+                        <div className="text-sm text-red-500">
+                            URL do comprovante inválida ou insegura.
+                        </div>
+                    ) : comprovanteDialog.isImage ? (
                         <img
                             src={comprovanteDialog.url}
-                            alt={comprovanteDialog.nome}
+                            alt={safeNome}
                             className="max-h-[70vh] w-full rounded-md object-contain"
                         />
                     ) : comprovanteDialog.isPdf ? (
                         <iframe
                             src={comprovanteDialog.url}
-                            title={comprovanteDialog.nome}
+                            title={safeNome}
                             className="h-[70vh] w-full rounded-md border"
+                            sandbox="allow-same-origin"
                         />
                     ) : (
                         <div className="space-y-2">
@@ -55,7 +64,7 @@ export function ComprovanteDialog({
                                 type="button"
                                 variant="outline"
                                 className="gap-2"
-                                onClick={() => window.open(comprovanteDialog.url, "_blank")}
+                                onClick={() => safeOpenUrl(comprovanteDialog.url)}
                             >
                                 <Download className="h-4 w-4" />
                                 Abrir PDF
@@ -67,3 +76,4 @@ export function ComprovanteDialog({
         </Dialog>
     );
 }
+

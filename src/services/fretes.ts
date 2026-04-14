@@ -25,6 +25,7 @@ export async function listarFretes(params?: {
   motorista_id?: string | number;
   caminhao_id?: string | number;
   fazenda_id?: string | number;
+  pagamento_id?: string | number; // Added so we can fetch fretes by payment
   search?: string;
 }): Promise<ApiResponse<Frete[]>> {
   try {

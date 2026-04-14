@@ -85,11 +85,18 @@ export default function Frota() {
   const itemsPerPage = 21;
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
-  // Query para buscar caminhões
+  // Query para buscar caminhões (Server-Side)
   const { data: caminhoesResponse, isLoading } = useQuery({
-    queryKey: ["caminhoes"],
-    queryFn: () => caminhoesService.listarCaminhoes(),
+    queryKey: ["caminhoes", currentPage, itemsPerPage, search, statusFilter, fleetFilter],
+    queryFn: () => caminhoesService.listarCaminhoes({
+      page: currentPage,
+      limit: itemsPerPage,
+      search,
+      status: statusFilter,
+      proprietario_tipo: fleetFilter === "proprio" ? "PROPRIO" : fleetFilter === "terceiro" ? "TERCEIRO" : undefined
+    }),
     refetchOnMount: "always",
+    placeholderData: (prev) => prev,
   });
 
   // Query para buscar motoristas
@@ -100,6 +107,10 @@ export default function Frota() {
   });
 
   const caminhoes = caminhoesResponse?.data || [];
+  const serverMeta = caminhoesResponse?.meta as any;
+  const totalFromServer = serverMeta?.total ?? caminhoes.length;
+  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
+
   const motoristasDisponiveis = sortMotoristasPorNome(motoristasResponse?.data || []);
   const transportadoraContelli = motoristasDisponiveis.find(
     (motorista) => String(motorista.nome || "").trim().toUpperCase() === "TRANSPORTADORA CONTELLI"
@@ -400,28 +411,9 @@ export default function Frota() {
     }
   };
 
-  const filteredData = caminhoes.filter((caminhao) => {
-    const motorista = motoristasDisponiveis.find((m) => m.id === caminhao.motorista_fixo_id);
-    const matchesSearch =
-      caminhao.placa.toLowerCase().includes(search.toLowerCase()) ||
-      caminhao.modelo.toLowerCase().includes(search.toLowerCase()) ||
-      (motorista?.nome || "").toLowerCase().includes(search.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || caminhao.status === statusFilter;
-    const matchesFleet =
-      fleetFilter === "all" ||
-      (fleetFilter === "proprio" && getFleetType(caminhao) === "PROPRIO") ||
-      (fleetFilter === "terceiro" && getFleetType(caminhao) === "TERCEIRO");
-    return matchesSearch && matchesStatus && matchesFleet;
-  });
-
-  const orderedData = [...filteredData].sort((a, b) => {
-    const aType = getFleetType(a) === "PROPRIO" ? 0 : 1;
-    const bType = getFleetType(b) === "PROPRIO" ? 0 : 1;
-    if (aType !== bType) return aType - bType;
-    return a.modelo.localeCompare(b.modelo, "pt-BR");
-  });
-
+  // Resumo de frota baseado no dado atualmente renderizado (da página)
+  // Como o backend paginado não tem totalizadores agrupados na API atualmente,
+  // mostrar a distribuição dessa visualização atual:
   const fleetSummary = {
     proprio: caminhoes.filter((c) => getFleetType(c) === "PROPRIO").length,
     terceiro: caminhoes.filter((c) => getFleetType(c) === "TERCEIRO").length,
@@ -430,10 +422,18 @@ export default function Frota() {
   const emManutencaoCount = caminhoes.filter((c) => c.status === "em_manutencao").length;
   const categoriasAtivasCount = new Set(caminhoes.map((c) => c.tipo_veiculo).filter(Boolean)).size;
 
-  // Lógica de paginação
-  const totalPages = Math.ceil(orderedData.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = orderedData.slice(startIndex, startIndex + itemsPerPage);
+  // Lógica de paginação principal
+  const totalPages = totalPagesFromServer;
+  
+  // Utilizar diretamente a resposta do servidor:
+  const orderedData = [...caminhoes].sort((a, b) => {
+    const aType = getFleetType(a) === "PROPRIO" ? 0 : 1;
+    const bType = getFleetType(b) === "PROPRIO" ? 0 : 1;
+    if (aType !== bType) return aType - bType;
+    return a.modelo.localeCompare(b.modelo, "pt-BR");
+  });
+  
+  const paginatedData = orderedData;
   const paginatedProprios = paginatedData.filter((c) => getFleetType(c) === "PROPRIO");
   const paginatedTerceiros = paginatedData.filter((c) => getFleetType(c) === "TERCEIRO");
 

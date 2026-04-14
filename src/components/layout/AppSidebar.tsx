@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
 import {
   LayoutDashboard,
   Truck,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   Menu,
   CreditCard,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -35,6 +37,7 @@ const navigation = [
   { name: "Pagamentos", href: "/pagamentos", icon: CreditCard },
   { name: "Relatórios", href: "/relatorios", icon: FileText },
   { name: "Indicadores", href: "/indicadores", icon: TrendingUp },
+  { name: "Usuários", href: "/usuarios", icon: ShieldCheck },
 ];
 
 export function AppSidebar() {
@@ -103,6 +106,12 @@ interface SidebarContentProps {
 
 function SidebarContent({ collapsed, onNavigate }: SidebarContentProps) {
   const location = useLocation();
+  const { user } = useAuth();
+
+  const filteredNavigation = navigation.filter((item) => {
+    if (item.name === "Usuários" && user?.role !== "admin") return false;
+    return true;
+  });
 
   return (
     <>
@@ -125,7 +134,7 @@ function SidebarContent({ collapsed, onNavigate }: SidebarContentProps) {
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto scrollbar-thin">
-        {navigation.map((item) => {
+        {filteredNavigation.map((item) => {
           const isActive = location.pathname === item.href;
           return (
             <NavLink

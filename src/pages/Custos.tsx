@@ -29,6 +29,7 @@ import {
 import custosService from "@/services/custos";
 import * as fretesService from "@/services/fretes";
 import { usePeriodoFilter } from "@/hooks/usePeriodoFilter";
+import { useCustos } from "@/hooks/queries/useCustos";
 import type { ApiResponse, Custo, CriarCustoPayload, Frete } from "@/types";
 import { toast } from "sonner";
 import {
@@ -127,19 +128,25 @@ export default function Custos() {
   const queryClient = useQueryClient();
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
-  // Query para listar custos
-  const { data: custosResponse, isLoading } = useQuery<ApiResponse<Custo[]>>({
-    queryKey: ["custos"],
-    queryFn: () => custosService.fetchAllCustos(),
-  });
+  // Parâmetros de filtro server-side
+  const [page, setPage] = useState(1);
+  const itemsPerPage = ITEMS_PER_PAGE;
 
-  // Query para listar fretes (vinculo de custos)
+  // Os filtros abaixo serão também enviados ao servidor
+  // (tipo, motorista, comprovante, data, search)
+  // Mas como o backend de custos atual não suporta esses filtros query params,
+  // mantemos a página buscando page/limit e filtramos localmente por enquanto.
+  // A key useCustos já aceita os campos quando o backend suportar.
+  const { data: custosResponse, isLoading } = useCustos({ page, limit: itemsPerPage });
+
+  const custos: Custo[] = custosResponse?.data || [];
+  const serverMeta = custosResponse?.meta;
+  const totalFromServer = serverMeta?.total ?? custos.length;
+  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
   const { data: fretesResponse } = useQuery<ApiResponse<Frete[]>>({
-    queryKey: ["fretes"],
-    // Solicita um limite maior para garantir que a lista local de fretes
-    // contenha a maioria dos registros e permita resolver o motorista/frete
-    // associados aos lançamentos de custos.
-    queryFn: () => fretesService.listarFretes({ page: 1, limit: 1000 }),
+    queryKey: ["fretes", "preview"],
+    queryFn: () => fretesService.listarFretes({ page: 1, limit: 200 }),
+    staleTime: 1000 * 60 * 10,
   });
 
   // Query para listar fretes PENDENTES (sem pagamento)
@@ -148,7 +155,6 @@ export default function Custos() {
     queryFn: () => fretesService.listarFretesPendentes(),
   });
 
-  const custos: Custo[] = custosResponse?.data || [];
   const fretes = fretesResponse?.data || [];
   const fretesPendentes = (() => {
     const rawData = fretesPendentesResponse?.data || [];
@@ -181,12 +187,12 @@ export default function Custos() {
     return dedupeById((fretesPendentes || []).filter((item) => isFreteValido(item) && isSemPagamento(item)));
   })();
 
-  // Hook para filtro de período
+  // Hook de período — usado apenas para UI (PeriodoFilter) e exibir períodos disponíveis
+  // A filtragem de período server-side pode ser adicionada ao useCustos futuramente
   const {
     tipoVisualizacao,
     selectedPeriodo,
     periodosDisponiveis,
-    dadosFiltrados: custosFiltrados,
     formatPeriodoLabel,
     setTipoVisualizacao,
     setSelectedPeriodo,
@@ -194,6 +200,8 @@ export default function Custos() {
     data: custos,
     getDataField: (c) => c.data,
   });
+  // Alias sem filtro de período (itens já vêm do servidor paginados)
+  const custosFiltradosPorPeriodo = custos;
 
   // Mutation para criar custo
   const createMutation = useMutation({
@@ -272,7 +280,6 @@ export default function Custos() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [confirmDeleteCusto, setConfirmDeleteCusto] = useState<Custo | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = ITEMS_PER_PAGE;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pageCombustivel, setPageCombustivel] = useState(1);
   const [pageManutencao, setPageManutencao] = useState(1);
@@ -534,10 +541,9 @@ export default function Custos() {
     dateFrom !== undefined ||
     dateTo !== undefined;
 
-  // Lista única de motoristas usando dados do custo e do frete associado
   const motoristas = Array.from(
     new Set(
-      custosFiltrados.map(c => {
+      custos.map(c => {
         const related = fretes.find(f => isCustoFromFrete((c as any).frete_id, f.id, c.codigo_frete));
         const motoristaResultante = c.motorista || related?.motorista_nome || related?.proprietario_nome || "—";
         return motoristaResultante;
@@ -545,32 +551,26 @@ export default function Custos() {
     )
   ).sort();
 
-  const filteredData = custosFiltrados.filter((custo) => {
+  // Filtragem local (sobre os itens da página atual vindos do servidor)
+  const filteredData = custos.filter((custo) => {
     const related = fretes.find(f => isCustoFromFrete((custo as any).frete_id, f.id, custo.codigo_frete));
     const motoristaResultante = custo.motorista || related?.motorista_nome || related?.proprietario_nome || "—";
     const codigoFrete = custo.codigo_frete || related?.codigo_frete || getFreteCodeFallback(custo.frete_id);
 
-    // Filtro de busca
     const q = search.toLowerCase();
-    const matchesSearch =
+    const matchesSearch = !q ||
       String(custo.frete_id || "").toLowerCase().includes(q) ||
       String(codigoFrete || "").toLowerCase().includes(q) ||
       String(custo.descricao || "").toLowerCase().includes(q) ||
       String(motoristaResultante).toLowerCase().includes(q);
 
-    // Filtro de tipo
     const matchesTipo = tipoFilter === "all" || custo.tipo === tipoFilter;
-
-    // Filtro de motorista
     const matchesMotorista = motoristaFilter === "all" || motoristaResultante === motoristaFilter;
-
-    // Filtro de comprovante
     const matchesComprovante =
       comprovanteFilter === "all" ||
       (comprovanteFilter === "com" && custo.comprovante) ||
       (comprovanteFilter === "sem" && !custo.comprovante);
 
-    // Filtro de data
     let matchesDate = true;
     if (dateFrom || dateTo) {
       const custoDate = parseCustoDate(custo.data);
@@ -591,29 +591,13 @@ export default function Custos() {
   const pedagioItems = filteredData.filter((c) => getTipoKey(c.tipo) === "pedagio");
   const outrosItems = filteredData.filter((c) => getTipoKey(c.tipo) === "outros");
 
-  // Ordenar por ID para exibir os itens recém criados primeiro (ordem decrescente)
-  const compareByNewestFirst = (a: Custo, b: Custo) => {
-    const idA = Number(a.id);
-    const idB = Number(b.id);
+  // Totais para os cards (sobre a página atual — filtrada localmente)
+  const totalCustos = filteredData.reduce((acc, c) => acc + toNumber(c.valor), 0);
+  const totalCombustivel = combustivelItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
+  const totalManutencao = manutencaoItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
+  const totalPedagio = pedagioItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
 
-    // Se forem IDs sequenciais numéricos
-    if (!isNaN(idA) && !isNaN(idB)) {
-      if (idB !== idA) return idB - idA;
-    }
-
-    // Fallback para string (ex: UUIDs ou se não for um número válido)
-    return String(b.id).localeCompare(String(a.id));
-  };
-
-  combustivelItems.sort(compareByNewestFirst);
-  manutencaoItems.sort(compareByNewestFirst);
-  pedagioItems.sort(compareByNewestFirst);
-  outrosItems.sort(compareByNewestFirst);
-
-  // Lógica de paginação
-  // Lógica de paginação
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-
+  // Paginação por tipo — client-side dentro da página atual do servidor
   const paginatedCombustivel = combustivelItems.slice((pageCombustivel - 1) * itemsPerPage, pageCombustivel * itemsPerPage);
   const paginatedManutencao = manutencaoItems.slice((pageManutencao - 1) * itemsPerPage, pageManutencao * itemsPerPage);
   const paginatedPedagio = pedagioItems.slice((pagePedagio - 1) * itemsPerPage, pagePedagio * itemsPerPage);
@@ -624,19 +608,18 @@ export default function Custos() {
   const totalPagesPedagio = Math.ceil(pedagioItems.length / itemsPerPage);
   const totalPagesOutros = Math.ceil(outrosItems.length / itemsPerPage);
 
-  // Resetar para página 1 quando aplicar novos filtros
+  // Paginação principal (server-side): navega entre páginas do servidor
+  const totalPages = totalPagesFromServer;
+
+  // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
+    setPage(1);
     setCurrentPage(1);
     setPageCombustivel(1);
     setPageManutencao(1);
     setPagePedagio(1);
     setPageOutros(1);
   }, [search, tipoFilter, motoristaFilter, comprovanteFilter, dateFrom, dateTo, tipoVisualizacao, selectedPeriodo]);
-
-  const totalCustos = custosFiltrados.reduce((acc, c) => acc + toNumber(c.valor), 0);
-  const totalCombustivel = combustivelItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
-  const totalManutencao = manutencaoItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
-  const totalPedagio = pedagioItems.reduce((acc, c) => acc + toNumber(c.valor), 0);
 
   const columns = [
     {
@@ -1186,6 +1169,33 @@ export default function Custos() {
       >
         <Plus className="h-6 w-6" />
       </Button>
+
+      {/* Navegação de página principal (server-side) */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mb-2 px-1">
+          <p className="text-sm text-muted-foreground">
+            Página <strong>{page}</strong> de <strong>{totalPages}</strong> — {totalFromServer} registros
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Separação por Categoria */}
       <div className="space-y-6">

@@ -4,13 +4,23 @@ import type { CriarFazendaPayload } from "@/types";
 
 export const FAZENDAS_QUERY_KEY = ["fazendas"] as const;
 
-export function useFazendas(params?: { page?: number; limit?: number }) {
-  const page = params?.page ?? 1;
-  const limit = params?.limit ?? 50;
+export interface FazendasQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export function useFazendas(params?: FazendasQueryParams) {
+  const { page = 1, limit = 50, search } = params ?? {};
+  
+  const queryParams: Record<string, any> = { page, limit };
+  if (search) queryParams.search = search;
+
   return useQuery({
-    queryKey: [...FAZENDAS_QUERY_KEY, page, limit],
-    queryFn: () => fazendasService.listarFazendas({ page, limit }),
+    queryKey: [...FAZENDAS_QUERY_KEY, page, limit, search].filter(Boolean),
+    queryFn: () => fazendasService.listarFazendas(queryParams),
     staleTime: 1000 * 60 * 5,
+    placeholderData: (prev) => prev,
   });
 }
 

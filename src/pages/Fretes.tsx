@@ -78,6 +78,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useMotoristas } from "@/hooks/queries/useMotoristas";
 import { useFretes, useCriarFrete, useDeletarFrete, useEstatisticasFretes } from "@/hooks/queries/useFretes";
+import type { EstatisticasQueryParams } from "@/hooks/queries/useFretes";
 
 interface Frete {
   id: string;
@@ -264,6 +265,8 @@ export default function Fretes() {
   const [selectedFrete, setSelectedFrete] = useState<Frete | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  // Fazendas disponíveis para o filtro (carregadas da API ao precisar)
+  const [fazendasParaFiltro, setFazendasParaFiltro] = useState<Array<{ id: string; nome: string }>>([]);
   const [isNewFreteOpen, setIsNewFreteOpen] = useState(false);
   const [isEditingFrete, setIsEditingFrete] = useState(false);
   const [isSavingFrete, setIsSavingFrete] = useState(false);
@@ -397,7 +400,7 @@ export default function Fretes() {
     },
   });
 
-  // Hook para estatísticas
+  // Hook para estatísticas — sem filtros (usado apenas para periodos_disponiveis)
   const { data: estatisticasResponse } = useEstatisticasFretes();
 
   // Calcular data inicio/fim do periodo selecionado p/ enviar à API
@@ -434,10 +437,40 @@ export default function Fretes() {
     return { data_inicio, data_fim };
   }, [selectedPeriodo, tipoVisualizacao]);
 
-  // Carregar todos os fretes DO MÊS ESPECÍFICO em background para paginação local/somatórios (+leve)
-  const { data: fretesAllResponse, isLoading: isLoadingFretes } = useFretes({ fetchAll: true, ...periodoDatas });
-  // Passaremos o fretesAllResponse para fretesResponse, afinal a tabela paginará no client
-  const fretesResponse = fretesAllResponse;
+  // Refinar datas com dateRange (filtro de calendário livre dentro do período)
+  const datasEfetivas = useMemo(() => {
+    let data_inicio = periodoDatas.data_inicio;
+    let data_fim = periodoDatas.data_fim;
+    if (dateRange?.from) {
+      const d = format(dateRange.from, "yyyy-MM-dd");
+      if (!data_inicio || d > data_inicio) data_inicio = d;
+    }
+    if (dateRange?.to) {
+      const d = format(dateRange.to, "yyyy-MM-dd");
+      if (!data_fim || d < data_fim) data_fim = d;
+    }
+    return { data_inicio, data_fim };
+  }, [periodoDatas, dateRange]);
+
+  // Parâmetros de filtro server-side ativos
+  const serverFiltros = useMemo(() => ({
+    ...datasEfetivas,
+    motorista_id: motoristaFilter !== "all" ? motoristaFilter : undefined,
+    caminhao_id: caminhaoFilter !== "all" ? caminhaoFilter : undefined,
+    fazenda_id: fazendaFilter !== "all" ? fazendaFilter : undefined,
+    search: search.trim() || undefined,
+  }), [datasEfetivas, motoristaFilter, caminhaoFilter, fazendaFilter, search]);
+
+  // === SERVER-SIDE PAGINATION ===
+  // Busca apenas a página atual com todos os filtros ativos no servidor
+  const { data: fretesResponse, isLoading: isLoadingFretes } = useFretes({
+    page: currentPage,
+    limit: itemsPerPage,
+    ...serverFiltros,
+  });
+
+  // Estatísticas filtradas para os KPI cards (usa os mesmos filtros)
+  const { data: estatisticasFiltradas } = useEstatisticasFretes(serverFiltros as EstatisticasQueryParams);
 
   // Carregar pagamentos (usado para marcar fretes pagos)
   const { data: pagamentosResponse } = useQuery<ApiResponse<any[]>>({
@@ -524,72 +557,6 @@ export default function Fretes() {
     [fretesResponse?.data, custosState, pagamentosResponse?.data]
   );
 
-  // All fretes (full dataset) used for totals/periods
-  const fretesAllAPI: Frete[] = useMemo(
-    () =>
-      (fretesAllResponse?.data ?? [])
-        .map((freteAPI) => {
-          const custosVindosDosLancamentos = getTotalCustosByFreteRef(
-            freteAPI.id,
-            freteAPI.codigo_frete
-          );
-          const custos =
-            custosVindosDosLancamentos > 0
-              ? custosVindosDosLancamentos
-              : toNumber(freteAPI.custos);
-          const receita = toNumber(freteAPI.receita);
-
-          const freteIdStr = String(freteAPI.id);
-          const isPago = pagamentosApi.some((p) => {
-            const fretes_incluidos: string | null | undefined = p.fretes_incluidos;
-            if (!fretes_incluidos) return false;
-            return (
-              p.status === "pago" &&
-              fretes_incluidos
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
-                .includes(freteIdStr)
-            );
-          });
-
-          return {
-            id: freteAPI.id,
-            codigoFrete: freteAPI.codigo_frete || undefined,
-            pagamentoId: freteAPI.pagamento_id || undefined,
-            isPago,
-            origem: freteAPI.origem,
-            destino: freteAPI.destino,
-            motorista: freteAPI.proprietario_nome || freteAPI.motorista_nome,
-            motoristaId: freteAPI.proprietario_id || freteAPI.motorista_id,
-            caminhao: freteAPI.caminhao_placa,
-            caminhaoId: freteAPI.caminhao_id,
-            mercadoria: freteAPI.mercadoria,
-            mercadoriaId: freteAPI.mercadoria_id || freteAPI.mercadoria,
-            fazendaId: freteAPI.fazenda_id || undefined,
-            fazendaNome: freteAPI.fazenda_nome || undefined,
-            variedade: freteAPI.variedade || undefined,
-            dataFrete: freteAPI.data_frete,
-            quantidadeSacas: freteAPI.quantidade_sacas,
-            toneladas: freteAPI.toneladas,
-            valorPorTonelada: freteAPI.valor_por_tonelada,
-            receita,
-            custos,
-            resultado: receita - custos,
-            ticket: freteAPI.ticket || undefined,
-          };
-        })
-        .sort((a, b) => {
-          const dt = dateToTimestamp(b.dataFrete) - dateToTimestamp(a.dataFrete);
-          if (dt !== 0) return dt;
-          const na = codigoNumero(a.codigoFrete);
-          const nb = codigoNumero(b.codigoFrete);
-          if (nb !== na) return nb - na;
-          return String(b.id).localeCompare(String(a.id));
-        }),
-    [fretesAllResponse?.data, custosState, pagamentosResponse?.data]
-  );
-
   const motoristasData = Array.isArray(motoristasResponse?.data) ? motoristasResponse.data : [];
   const motoristasState = (() => {
     const sorted = sortMotoristasPorNome(motoristasData);
@@ -602,9 +569,25 @@ export default function Fretes() {
     return [...proprios, ...outros];
   })();
   const caminhoesState = Array.isArray(caminhoesData) ? caminhoesData : [];
+  // fretesState = dados da página atual (server-side)
   const fretesState = Array.isArray(fretesAPI) ? fretesAPI : [];
-  const fretesAllState = Array.isArray(fretesAllAPI) ? fretesAllAPI : [];
+  // Pagination metadata from server
+  const serverMeta = fretesResponse?.meta;
+  const totalFiltered = serverMeta?.total ?? fretesState.length;
+  const totalPages = serverMeta?.totalPages ?? Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const paginatedData = fretesState; // already the current page from server
   const editRouteHandledRef = useRef<string | null>(null);
+
+  // Carregar fazendas para o filtro (só uma vez)
+  useEffect(() => {
+    fazendasService.listarFazendas().then((res) => {
+      if (res.success && res.data) {
+        setFazendasParaFiltro(
+          res.data.map((f) => ({ id: String(f.id), nome: f.fazenda }))
+        );
+      }
+    });
+  }, []);
 
   // Validar se período selecionado existe nos dados estatisticos
   useEffect(() => {
@@ -1272,12 +1255,13 @@ export default function Fretes() {
 
     yPosition += 12;
 
-    // Cálculos (baseados no conjunto completo filtrado)
-    const totalReceita = filteredAllData.reduce((acc, f) => acc + toNumber(f.receita), 0);
-    const totalCustos = filteredAllData.reduce((acc, f) => acc + toNumber(f.custos), 0);
-    const totalLucro = totalReceita - totalCustos;
-    const totalToneladas = filteredAllData.reduce((acc, f) => acc + toNumber(f.toneladas), 0);
-    const qtdFretes = filteredAllData.length;
+    // Cálculos (baseados nas estatísticas filtradas do backend)
+    const statsTotais = estatisticasFiltradas?.data?.totais;
+    const totalReceita = toNumber(statsTotais?.total_receita);
+    const totalCustos = toNumber(statsTotais?.total_custos);
+    const totalLucro = toNumber(statsTotais?.lucro ?? (totalReceita - totalCustos));
+    const totalToneladas = toNumber(statsTotais?.total_toneladas);
+    const qtdFretes = statsTotais?.total_fretes ?? totalFiltered;
 
     doc.setTextColor(0, 0, 0);
 
@@ -1312,7 +1296,7 @@ export default function Fretes() {
     cX += cardWidth + gap;
 
     // Card 2 - Toneladas
-    const totalSacas = filteredAllData.reduce((acc, f) => acc + f.quantidadeSacas, 0);
+    const totalSacas = toNumber(statsTotais?.total_sacas);
     drawCard(cX, yPosition, cardWidth, cardH, "Toneladas", `${totalToneladas.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).replace(",", ".")} t`, [250, 245, 255], [168, 85, 247], [71, 85, 105], [147, 51, 234], `${totalSacas.toLocaleString("pt-BR")} sacas`);
     cX += cardWidth + gap;
 
@@ -1341,8 +1325,8 @@ export default function Fretes() {
 
     yPosition += 12;
 
-    // Tabela detalhada - USANDO FILTROS APLICADOS
-    const tableData = filteredAllData.map((f) => {
+    // Tabela detalhada — usa os fretes da página atual (server-side)
+    const tableData = fretesState.map((f) => {
       let rotaFormatada = "";
       const origemSegura = f.origem?.trim() || "";
       const destinoSeguro = f.destino?.trim() || "";
@@ -1421,131 +1405,14 @@ export default function Fretes() {
     toast.success(`PDF "${nomeArquivo}" gerado com sucesso!`, { duration: 4000 });
   };
 
-  // Filtrar fretes por período selecionado (apenas dados da página atual)
-  const fretesFiltradasPorPeriodo = useMemo(() => {
-    if (!Array.isArray(fretesState)) return [];
-    return fretesState.filter((f) => {
-      const freteDate = parseDateBR(f.dataFrete);
-      const anoFrete = freteDate.getFullYear();
-      const mesFrete = freteDate.getMonth() + 1; // 1-12
+  // Período já é enviado ao servidor via datasEfetivas — não há mais filtragem local de período
 
-      if (tipoVisualizacao === "mensal") {
-        // Formato: "2026-02"
-        const periodoItem = `${anoFrete}-${String(mesFrete).padStart(2, "0")}`;
-        return periodoItem === selectedPeriodo;
-      } else if (tipoVisualizacao === "trimestral") {
-        // Formato: "2026-T1" (T1, T2, T3, T4)
-        const trimestreFrete = Math.ceil(mesFrete / 3);
-        const periodoItem = `${anoFrete}-T${trimestreFrete}`;
-        return periodoItem === selectedPeriodo;
-      } else if (tipoVisualizacao === "semestral") {
-        // Formato: "2026-S1" (S1, S2)
-        const semestreFrete = mesFrete <= 6 ? 1 : 2;
-        const periodoItem = `${anoFrete}-S${semestreFrete}`;
-        return periodoItem === selectedPeriodo;
-      } else if (tipoVisualizacao === "anual") {
-        // Formato: "2026"
-        return String(anoFrete) === selectedPeriodo;
-      }
-      return false;
-    });
-  }, [selectedPeriodo, fretesState, tipoVisualizacao]);
+  // Filtros agora são server-side: filteredData e filteredAllData substituídos por fretesState (página atual)
 
-  // Filtrar todos os fretes por período selecionado (full dataset) — usado para somatórios e opções
-  const fretesFiltradasPorPeriodoAll = useMemo(() => {
-    if (!Array.isArray(fretesAllState)) return [];
-    return fretesAllState.filter((f) => {
-      const freteDate = parseDateBR(f.dataFrete);
-      const anoFrete = freteDate.getFullYear();
-      const mesFrete = freteDate.getMonth() + 1; // 1-12
-
-      if (tipoVisualizacao === "mensal") {
-        const periodoItem = `${anoFrete}-${String(mesFrete).padStart(2, "0")}`;
-        return periodoItem === selectedPeriodo;
-      } else if (tipoVisualizacao === "trimestral") {
-        const trimestreFrete = Math.ceil(mesFrete / 3);
-        const periodoItem = `${anoFrete}-T${trimestreFrete}`;
-        return periodoItem === selectedPeriodo;
-      } else if (tipoVisualizacao === "semestral") {
-        const semestreFrete = mesFrete <= 6 ? 1 : 2;
-        const periodoItem = `${anoFrete}-S${semestreFrete}`;
-        return periodoItem === selectedPeriodo;
-      } else if (tipoVisualizacao === "anual") {
-        return String(anoFrete) === selectedPeriodo;
-      }
-      return false;
-    });
-  }, [selectedPeriodo, fretesAllState, tipoVisualizacao]);
-
-  const filteredData = fretesFiltradasPorPeriodo.filter((frete) => {
-    const matchesSearch =
-      frete.origem.toLowerCase().includes(search.toLowerCase()) ||
-      frete.destino.toLowerCase().includes(search.toLowerCase()) ||
-      frete.motorista.toLowerCase().includes(search.toLowerCase()) ||
-      String(frete.id || "").toLowerCase().includes(search.toLowerCase());
-    const matchesMotorista = motoristaFilter === "all" || frete.motoristaId === motoristaFilter;
-    const matchesCaminhao = caminhaoFilter === "all" || frete.caminhaoId === caminhaoFilter;
-    const matchesFazenda =
-      fazendaFilter === "all" || normalizeFazendaNome(getFazendaNome(frete)) === fazendaFilter;
-    let matchesPeriodo = true;
-    if (dateRange?.from || dateRange?.to) {
-      const freteDate = parseDateBR(frete.dataFrete);
-      if (dateRange?.from) {
-        if (freteDate < dateRange.from) matchesPeriodo = false;
-      }
-      if (dateRange?.to) {
-        if (freteDate > dateRange.to) matchesPeriodo = false;
-      }
-    }
-
-    return matchesSearch && matchesMotorista && matchesCaminhao && matchesFazenda && matchesPeriodo;
-  });
-
-  // Filtrado aplicado sobre o conjunto completo (usado nos cards e export)
-  const filteredAllData = fretesFiltradasPorPeriodoAll.filter((frete) => {
-    const matchesSearch =
-      frete.origem.toLowerCase().includes(search.toLowerCase()) ||
-      frete.destino.toLowerCase().includes(search.toLowerCase()) ||
-      frete.motorista.toLowerCase().includes(search.toLowerCase()) ||
-      String(frete.id || "").toLowerCase().includes(search.toLowerCase());
-    const matchesMotorista = motoristaFilter === "all" || frete.motoristaId === motoristaFilter;
-    const matchesCaminhao = caminhaoFilter === "all" || frete.caminhaoId === caminhaoFilter;
-    const matchesFazenda =
-      fazendaFilter === "all" || normalizeFazendaNome(getFazendaNome(frete)) === fazendaFilter;
-    let matchesPeriodo = true;
-    if (dateRange?.from || dateRange?.to) {
-      const freteDate = parseDateBR(frete.dataFrete);
-      if (dateRange?.from) {
-        if (freteDate < dateRange.from) matchesPeriodo = false;
-      }
-      if (dateRange?.to) {
-        if (freteDate > dateRange.to) matchesPeriodo = false;
-      }
-    }
-
-    return matchesSearch && matchesMotorista && matchesCaminhao && matchesFazenda && matchesPeriodo;
-  });
-
-  // Lógica de paginação (agora sempre client-side devido ao filtro de período do front)
-  const isFiltering = true;
-
-  const totalFiltered = filteredAllData.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredAllData.slice(startIndex, startIndex + itemsPerPage);
-
-  // Resetar para página 1 quando aplicar novos filtros
+  // Resetar para página 1 quando qualquer filtro mudar
   useEffect(() => {
     setCurrentPage(1);
   }, [search, motoristaFilter, caminhaoFilter, fazendaFilter, dateRange, selectedPeriodo]);
-
-  const fazendasOptions = Array.from(
-    new Set(
-      fretesFiltradasPorPeriodoAll
-        .map((f) => normalizeFazendaNome(getFazendaNome(f)))
-        .filter(Boolean)
-    )
-  ) as string[];
 
   // Extrair períodos disponíveis baseado nos dados estáticos da API
   const periodosDisponiveis: string[] = useMemo(() => {
@@ -1870,55 +1737,67 @@ export default function Fretes() {
         }
       />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
-        <Card className="p-3 md:p-4 bg-muted/40">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs md:text-base font-semibold text-muted-foreground">Fretes no período</p>
-            <Package className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground/60" />
+      {/* Summary Cards — dados vindos do backend (estatísticas filtradas) */}
+      {(() => {
+        const totais = estatisticasFiltradas?.data?.totais;
+        const totalFretes = totais?.total_fretes ?? totalFiltered;
+        const totalToneladas = toNumber(totais?.total_toneladas);
+        const totalSacas = toNumber(totais?.total_sacas);
+        const totalReceita = toNumber(totais?.total_receita);
+        const totalCustos = toNumber(totais?.total_custos);
+        const totalLucro = toNumber(totais?.lucro ?? (totalReceita - totalCustos));
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
+            <Card className="p-3 md:p-4 bg-muted/40">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs md:text-base font-semibold text-muted-foreground">Fretes no período</p>
+                <Package className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground/60" />
+              </div>
+              <p className="text-2xl md:text-3xl font-bold">{totalFretes}</p>
+            </Card>
+            <Card className="p-3 md:p-4 bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs md:text-base font-semibold text-muted-foreground">Toneladas</p>
+                <Weight className="h-4 w-4 md:h-5 md:w-5 text-purple-600" />
+              </div>
+              <p className="text-2xl md:text-3xl font-bold text-purple-600">
+                {totalToneladas.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}t
+              </p>
+              <p className="text-xs md:text-sm font-medium text-purple-600/70 mt-1">
+                {totalSacas.toLocaleString("pt-BR")} sacas
+              </p>
+            </Card>
+            <Card className="p-3 md:p-4 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs md:text-base font-semibold text-muted-foreground">Receita total</p>
+                <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
+              </div>
+              <p className="text-xl md:text-3xl font-bold text-blue-600">
+                R$ {totalReceita.toLocaleString("pt-BR")}
+              </p>
+            </Card>
+            <Card className="p-3 md:p-4 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs md:text-base font-semibold text-muted-foreground">Custos adicionais</p>
+                <AlertCircle className="h-4 w-4 md:h-5 md:w-5 text-red-600" />
+              </div>
+              <p className="text-xl md:text-3xl font-bold text-red-600">
+                R$ {totalCustos.toLocaleString("pt-BR")}
+              </p>
+            </Card>
+            <Card className="p-3 md:p-4 bg-profit/5 border-profit/20 col-span-2 md:col-span-1">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs md:text-base font-semibold text-muted-foreground">Lucro líquido</p>
+                <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-profit" />
+              </div>
+              <p className="text-xl md:text-3xl font-bold text-profit">
+                R$ {totalLucro.toLocaleString("pt-BR")}
+              </p>
+            </Card>
           </div>
-          <p className="text-2xl md:text-3xl font-bold">{filteredAllData.length}</p>
-        </Card>
-        <Card className="p-3 md:p-4 bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs md:text-base font-semibold text-muted-foreground">Toneladas</p>
-            <Weight className="h-4 w-4 md:h-5 md:w-5 text-purple-600" />
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-purple-600">
-            {filteredAllData.reduce((acc, f) => acc + toNumber(f.toneladas), 0).toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}t
-          </p>
-          <p className="text-xs md:text-sm font-medium text-purple-600/70 mt-1">
-            {filteredAllData.reduce((acc, f) => acc + toNumber(f.quantidadeSacas), 0).toLocaleString("pt-BR")} sacas
-          </p>
-        </Card>
-        <Card className="p-3 md:p-4 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs md:text-base font-semibold text-muted-foreground">Receita total</p>
-            <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
-          </div>
-          <p className="text-xl md:text-3xl font-bold text-blue-600">
-            R$ {filteredAllData.reduce((acc, f) => acc + toNumber(f.receita), 0).toLocaleString("pt-BR")}
-          </p>
-        </Card>
-        <Card className="p-3 md:p-4 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs md:text-base font-semibold text-muted-foreground">Custos adicionais</p>
-            <AlertCircle className="h-4 w-4 md:h-5 md:w-5 text-red-600" />
-          </div>
-          <p className="text-xl md:text-3xl font-bold text-red-600">
-            R$ {filteredAllData.reduce((acc, f) => acc + toNumber(f.custos), 0).toLocaleString("pt-BR")}
-          </p>
-        </Card>
-        <Card className="p-3 md:p-4 bg-profit/5 border-profit/20 col-span-2 md:col-span-1">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs md:text-base font-semibold text-muted-foreground">Lucro líquido</p>
-            <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-profit" />
-          </div>
-          <p className="text-xl md:text-3xl font-bold text-profit">
-            R$ {filteredAllData.reduce((acc, f) => acc + toNumber(f.resultado), 0).toLocaleString("pt-BR")}
-          </p>
-        </Card>
-      </div>
+        );
+      })()}
+
 
       {/* Filters - Desktop & Mobile */}
       {/* Mobile: Sheet Button */}
@@ -2054,9 +1933,9 @@ export default function Fretes() {
                   </SelectTrigger>
                   <SelectContent className="max-h-64 overflow-y-auto">
                     <SelectItem value="all">Todas</SelectItem>
-                    {fazendasOptions.map((f) => (
-                      <SelectItem key={f} value={f}>
-                        {f}
+                    {fazendasParaFiltro.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nome}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2177,9 +2056,9 @@ export default function Fretes() {
             </SelectTrigger>
             <SelectContent className="max-h-64 overflow-y-auto">
               <SelectItem value="all">Todas</SelectItem>
-              {fazendasOptions.map((f) => (
-                <SelectItem key={f} value={f}>
-                  {f}
+              {fazendasParaFiltro.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.nome}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -2256,7 +2135,7 @@ export default function Fretes() {
         <FretesTable
           columns={columns}
           paginatedData={paginatedData}
-          filteredData={isFiltering ? filteredAllData : filteredData}
+          filteredData={paginatedData}
           setSelectedFrete={setSelectedFrete}
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}

@@ -113,13 +113,17 @@ export default function Motoristas() {
     data: motoristasResponse,
     isLoading: isLoadingMotoristas,
     refetch: recarregarMotoristas,
-  } = useMotoristas();
+  } = useMotoristas({ page: currentPage, limit: itemsPerPage, search, status: statusFilter, tipo: tipoFilter });
   const { data: fretesResponse } = useFretes();
 
   const motoristasState: Motorista[] = useMemo(
     () => sortMotoristasPorNome(motoristasResponse?.data || []),
     [motoristasResponse?.data]
   );
+  const serverMeta = motoristasResponse?.meta as any;
+  const totalFromServer = serverMeta?.total ?? motoristasState.length;
+  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
+
   const fretesApi = fretesResponse?.data || [];
   const editRouteHandledRef = useRef<string | null>(null);
 
@@ -392,17 +396,8 @@ export default function Motoristas() {
     }
   }, [isModalOpen, location.pathname, navigate]);
 
-  const filteredData = motoristasState.filter((motorista) => {
-    const matchesSearch =
-      motorista.nome.toLowerCase().includes(search.toLowerCase()) ||
-      String(motorista.documento || '').includes(search);
-    const matchesStatus =
-      statusFilter === "all" || motorista.status === statusFilter;
-    const matchesTipo =
-      tipoFilter === "all" || motorista.tipo === tipoFilter;
-    return matchesSearch && matchesStatus && matchesTipo;
-  });
-
+  // Filtragem local desativada (agora é server-side)
+  // Mas mantemos a ordenação do Contelli no topo a nível de UI sobre a página atual retornada pelo servidor
   const isContelli = (motorista: Motorista) => {
     const haystack = [motorista.nome, motorista.endereco, motorista.email]
       .filter(Boolean)
@@ -411,18 +406,20 @@ export default function Motoristas() {
     return haystack.includes("contelli");
   };
 
-  // Ordenar alfabeticamente por nome (case-insensitive) com Contelli no topo
-  const sortedData = [...filteredData].sort((a, b) => {
+  const sortedData = [...motoristasState].sort((a, b) => {
     const aPriority = isContelli(a) ? 0 : 1;
     const bPriority = isContelli(b) ? 0 : 1;
     if (aPriority !== bPriority) return aPriority - bPriority;
     return a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
   });
 
-  // Lógica de paginação
-  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = sortedData.slice(startIndex, startIndex + itemsPerPage);
+  // Lógica de paginação principal
+  const totalPages = totalPagesFromServer;
+  const paginatedData = sortedData; // Itens que vieram do servidor já são a página correta
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, tipoFilter]);
 
   // Resetar para página 1 quando aplicar novos filtros
   useEffect(() => {
@@ -704,7 +701,7 @@ export default function Motoristas() {
               </Button>
             </div>
             <p className="text-xs text-center text-muted-foreground">
-              {filteredData.length} registros
+              {totalFromServer} registros
             </p>
           </div>
 
@@ -776,7 +773,7 @@ export default function Motoristas() {
               </PaginationContent>
             </Pagination>
             <div className="text-xs text-muted-foreground ml-4 flex items-center">
-              Página {currentPage} de {totalPages} • {filteredData.length} registros
+              Página {currentPage} de {totalPages} • {totalFromServer} registros
             </div>
           </div>
         </>
