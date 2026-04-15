@@ -68,6 +68,7 @@ interface SubmitResult {
   success: boolean;
   message?: string;
   codigoFrete?: string;
+  ticket?: string;
 }
 
 interface FreteLoteModalProps {
@@ -164,7 +165,7 @@ function FreteCard({
             variant="secondary"
             className={cn("font-mono text-xs shrink-0", hasErrors && "bg-destructive/10 text-destructive")}
           >
-            #{index + 1}
+            TICKET #{index + 1}
           </Badge>
           <span className="text-sm font-medium truncate">
             {item.estoqueSelecionado
@@ -179,7 +180,7 @@ function FreteCard({
           {isDuplicate && (
             <Badge variant="outline" className="text-[10px] text-yellow-600 border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 shrink-0">
               <AlertTriangle className="h-3 w-3 mr-1" />
-              Duplicado
+              Ticket duplicado
             </Badge>
           )}
           {hasErrors && (
@@ -326,9 +327,15 @@ function FreteCard({
               <Input
                 placeholder="0123"
                 value={item.ticket}
+                className={cn(isDuplicate && "border-destructive focus-visible:ring-destructive/30")}
                 disabled={disabled}
                 onChange={(e) => update({ ticket: e.target.value })}
               />
+              {isDuplicate && (
+                <p className="text-xs text-destructive font-medium">
+                  Ticket duplicado no lote. Ajuste este ticket para continuar.
+                </p>
+              )}
             </div>
             {item.estoqueSelecionado?.estado === "MS" && (
               <div className="space-y-2">
@@ -427,6 +434,10 @@ function ProgressScreen({ done, total, results, motoristaName }: ProgressScreenP
   const sucessos = results.filter((r) => r.success).length;
   const falhas = results.filter((r) => !r.success).length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const getTicketLabel = (result: SubmitResult) => {
+    const ticket = String(result.ticket || "").trim();
+    return ticket ? `Frete #Ticket ${ticket}` : `Frete #${result.index + 1}`;
+  };
 
   return (
     <div className="flex flex-col gap-6 py-4">
@@ -463,7 +474,11 @@ function ProgressScreen({ done, total, results, motoristaName }: ProgressScreenP
                   {r.success
                     ? <CheckCircle2 className="h-4 w-4 shrink-0" />
                     : <XCircle className="h-4 w-4 shrink-0" />}
-                  <span>Frete #{r.index + 1} — {r.success ? (r.codigoFrete || "✅ OK") : r.message}</span>
+                  <span>
+                    {getTicketLabel(r)} — {r.success
+                      ? `Lançado com sucesso. Código do frete: ${r.codigoFrete || "N/D"}`
+                      : `Falhou. Refaça o lançamento deste ticket.${r.message ? ` ${r.message}` : ""}`}
+                  </span>
                 </div>
               ))}
             </div>
@@ -494,11 +509,11 @@ function ProgressScreen({ done, total, results, motoristaName }: ProgressScreenP
 
           {/* Resumo dos resultados */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md border bg-green-50 dark:bg-green-950/20 border-green-200 p-3 text-center">
+            <div className="rounded-md border bg-gradient-to-br from-green-50 to-green-100/70 dark:from-green-950/20 dark:to-green-900/10 border-green-200 p-3 text-center shadow-sm">
               <p className="text-2xl font-bold text-green-600">{sucessos}</p>
-              <p className="text-xs text-green-700 dark:text-green-300">Lançados</p>
+              <p className="text-xs font-medium text-green-700 dark:text-green-300">Lançados</p>
             </div>
-            <div className={cn("rounded-md border p-3 text-center", falhas > 0 ? "bg-red-50 dark:bg-red-950/20 border-red-200" : "bg-muted/30 border-muted")}>
+            <div className={cn("rounded-md border p-3 text-center shadow-sm", falhas > 0 ? "bg-gradient-to-br from-red-50 to-red-100/70 dark:from-red-950/20 dark:to-red-900/10 border-red-200" : "bg-muted/30 border-muted")}>
               <p className={cn("text-2xl font-bold", falhas > 0 ? "text-destructive" : "text-muted-foreground")}>{falhas}</p>
               <p className={cn("text-xs", falhas > 0 ? "text-destructive/80" : "text-muted-foreground")}>Falharam</p>
             </div>
@@ -520,9 +535,9 @@ function ProgressScreen({ done, total, results, motoristaName }: ProgressScreenP
                   ? <CheckCircle2 className="h-4 w-4 shrink-0" />
                   : <XCircle className="h-4 w-4 shrink-0" />}
                 <span>
-                  Frete #{r.index + 1} — {r.success
-                    ? <span className="font-mono text-xs">{r.codigoFrete || "OK"}</span>
-                    : r.message}
+                  {getTicketLabel(r)} — {r.success
+                    ? <span className="font-mono text-xs">{r.codigoFrete || "N/D"}</span>
+                    : `Falhou. Refaça o lançamento deste ticket.${r.message ? ` ${r.message}` : ""}`}
                 </span>
               </div>
             ))}
@@ -624,11 +639,21 @@ export function FreteLoteModal({
 
   // Detecção de duplicatas dentro do lote
   const duplicateIds = new Set<string>();
-  fretes.forEach((f, i) => {
-    if (!f.fazendaEstoqueId || !f.dataFrete) return;
-    const key = `${f.fazendaEstoqueId}_${f.dataFrete}`;
-    const matches = fretes.filter((o, j) => j !== i && o.fazendaEstoqueId === f.fazendaEstoqueId && o.dataFrete === f.dataFrete);
-    if (matches.length > 0) duplicateIds.add(f.localId);
+  const duplicateKeyMap = new Map<string, string[]>();
+  fretes.forEach((f) => {
+    const ticket = String(f.ticket || "").trim().toLowerCase();
+    if (!ticket) return;
+
+    const key = ticket;
+    const list = duplicateKeyMap.get(key) || [];
+    list.push(f.localId);
+    duplicateKeyMap.set(key, list);
+  });
+
+  duplicateKeyMap.forEach((ids) => {
+    if (ids.length > 1) {
+      ids.forEach((id) => duplicateIds.add(id));
+    }
   });
 
   const handleSubmit = async () => {
@@ -656,28 +681,41 @@ export function FreteLoteModal({
     setProgressTotal(fretes.length);
     setProgressResults([]);
 
-    await onSubmitLote({
-      motoristaId,
-      caminhaoId,
-      fretes: validatedFretes.map((f) => ({
-        estoqueSelecionado: f.estoqueSelecionado!,
-        destino: f.destino,
-        dataFrete: f.dataFrete,
-        ticket: f.ticket,
-        toneladas: toNumber(f.toneladas),
-        valorPorTonelada: toNumber(f.valorPorTonelada),
-        numeroNotaFiscal: f.numeroNotaFiscal,
-      })),
-      onProgress: (done, total, result) => {
-        setProgressDone(done);
-        setProgressTotal(total);
-        setProgressResults((prev) => [...prev, result]);
-        if (done >= total) setIsComplete(true);
-      },
-    });
-
-    setIsComplete(true);
-    setIsProcessing(false);
+    try {
+      await onSubmitLote({
+        motoristaId,
+        caminhaoId,
+        fretes: validatedFretes.map((f) => ({
+          estoqueSelecionado: f.estoqueSelecionado!,
+          destino: f.destino,
+          dataFrete: f.dataFrete,
+          ticket: f.ticket,
+          toneladas: toNumber(f.toneladas),
+          valorPorTonelada: toNumber(f.valorPorTonelada),
+          numeroNotaFiscal: f.numeroNotaFiscal,
+        })),
+        onProgress: (done, total, result) => {
+          setProgressDone(done);
+          setProgressTotal(total);
+          setProgressResults((prev) => [...prev, result]);
+          if (done >= total) setIsComplete(true);
+        },
+      });
+    } catch (err) {
+      setProgressDone(1);
+      setProgressTotal(1);
+      setProgressResults([
+        {
+          index: 0,
+          success: false,
+          message: (err as any)?.message || "Erro inesperado ao processar o lote.",
+          ticket: "",
+        },
+      ]);
+    } finally {
+      setIsComplete(true);
+      setIsProcessing(false);
+    }
   };
 
   // Totais acumulados
@@ -783,7 +821,7 @@ export function FreteLoteModal({
                   {duplicateIds.size > 0 && (
                     <Badge variant="outline" className="text-[10px] text-yellow-600 border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20">
                       <AlertTriangle className="h-3 w-3 mr-1" />
-                      {duplicateIds.size} duplicado{duplicateIds.size > 1 ? "s" : ""}
+                      {duplicateIds.size} ticket duplicado{duplicateIds.size > 1 ? "s" : ""}
                     </Badge>
                   )}
                 </div>

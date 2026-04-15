@@ -77,7 +77,7 @@ export default function Login() {
     setIsSubmitting(true);
     const toastId = toast.loading("🔓 Autenticando...");
 
-    const res = await login(email, password);
+    const res = await login(email, password, { rememberMe });
 
     toast.dismiss(toastId);
 

@@ -20,6 +20,7 @@ export const SESSION_EXPIRED_MESSAGE = "Sua sessão expirou. Por favor, entre no
 
 export const STORAGE_KEYS = {
   user: "caramello_logistica_user",
+  auth: "@CaramelloLogistica:auth",
   /** @deprecated Mantido apenas para limpeza de legado no localStorage */
   accessToken: "@CaramelloLogistica:token",
   /** @deprecated Mantido apenas para limpeza de legado no localStorage */
@@ -30,6 +31,12 @@ export const STORAGE_KEYS = {
 
 let _accessToken: string | null = null;
 let _refreshToken: string | null = null;
+
+export interface PersistedAuthData {
+  user: object;
+  accessToken: string;
+  refreshToken?: string;
+}
 
 /** Obtém o access token da memória */
 export function getAccessToken(): string | null {
@@ -52,6 +59,32 @@ export function setTokens(accessToken: string, refreshToken?: string): void {
 /** Armazena apenas o access token em memória */
 export function setAccessToken(token: string): void {
   _accessToken = token;
+}
+
+/** Armazena a sessão lembrada no localStorage */
+export function setPersistedAuthData(data: PersistedAuthData): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.auth, JSON.stringify(data));
+  } catch {
+    // localStorage pode falhar em modo privado de alguns browsers
+  }
+}
+
+/** Obtém a sessão lembrada do localStorage */
+export function getPersistedAuthData<T = PersistedAuthData>(): T | undefined {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.auth);
+    return safeJsonParse<T>(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Remove a sessão lembrada do localStorage */
+export function clearPersistedAuthData(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.auth);
+  } catch { /* noop */ }
 }
 
 // ─── User data (não-sensível, sessionStorage) ───────────────────────────────
@@ -90,6 +123,7 @@ export function clearSessionStorage(): void {
 
   // Limpa legado do localStorage (migração)
   try {
+    localStorage.removeItem(STORAGE_KEYS.auth);
     localStorage.removeItem(STORAGE_KEYS.user);
     localStorage.removeItem(STORAGE_KEYS.accessToken);
     localStorage.removeItem(STORAGE_KEYS.refreshToken);

@@ -3,18 +3,25 @@ import { useNavigate } from "react-router-dom";
 import * as authService from "@/services/auth";
 import {
   clearSessionStorage,
+  clearPersistedAuthData,
+  getPersistedAuthData,
   setTokens,
   setUserData,
   getUserData,
   migrateFromLocalStorage,
+  setPersistedAuthData,
 } from "@/auth/session";
 import type { ApiResponse, User } from "@/types";
+
+interface LoginOptions {
+  rememberMe?: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<ApiResponse<any>>;
+  login: (email: string, password: string, options?: LoginOptions) => Promise<ApiResponse<any>>;
   logout: () => void;
 }
 
@@ -29,12 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Migra tokens antigos do localStorage (limpeza de segurança)
     migrateFromLocalStorage();
 
-    // Obtém dados do usuário do sessionStorage (não-sensível)
-    const storedUser = getUserData<User>();
+    // Obtém dados do usuário da sessão temporária ou da sessão lembrada
+    const storedUser = getUserData<User>() || getPersistedAuthData<{ user?: User }>()?.user;
 
     if (storedUser) {
       try {
         setUser(storedUser);
+        const persistedAuth = getPersistedAuthData<{ user?: User; accessToken?: string; refreshToken?: string }>();
+        if (persistedAuth?.accessToken) {
+          setTokens(persistedAuth.accessToken, persistedAuth.refreshToken);
+          setUserData(storedUser);
+        }
       } catch {
         clearSessionStorage();
       }
@@ -42,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<ApiResponse<any>> => {
+  const login = async (email: string, password: string, options?: LoginOptions): Promise<ApiResponse<any>> => {
     setIsLoading(true);
 
     // Try backend authentication first
@@ -51,11 +63,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (res.success && res.data) {
         const { user, token } = res.data;
+        const rememberMe = options?.rememberMe === true;
 
         setUser(user);
 
-        // Armazena dados do usuário no sessionStorage (não-sensível)
-        setUserData(user);
+        if (rememberMe) {
+          setUserData(user);
+          setPersistedAuthData({
+            user,
+            accessToken: token,
+            refreshToken: res.data.refreshToken,
+          });
+        } else {
+          clearPersistedAuthData();
+          setUserData(user);
+        }
 
         // Armazena tokens APENAS em memória (seguro contra XSS)
         if (token) {
@@ -80,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     clearSessionStorage();
+    clearPersistedAuthData();
     navigate("/login");
   };
 

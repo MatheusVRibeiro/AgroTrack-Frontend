@@ -142,22 +142,9 @@ const uniqueById = <T extends { id: string | number }>(items: T[]): T[] => {
 export default function Pagamentos() {
   const queryClient = useQueryClient();
 
-  // Lógica de Paginação Local Inicial (será Server-Side)
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = ITEMS_PER_PAGE;
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [autoEmitirGuia, setAutoEmitirGuia] = useState(true);
-
   const { data: pagamentosResponse, isLoading: isLoadingPagamentos } = useQuery<ApiResponse<Pagamento[]>>({
-    queryKey: ["pagamentos", currentPage, itemsPerPage, search, motoristaFilter, statusFilter],
-    queryFn: () => pagamentosService.listarPagamentos({ 
-      page: currentPage, 
-      limit: itemsPerPage,
-      search,
-      motorista_id: motoristaFilter === "all" ? undefined : motoristaFilter,
-      status: statusFilter === "all" ? undefined : statusFilter
-    } as any),
-    placeholderData: (prev) => prev,
+    queryKey: ["pagamentos"],
+    queryFn: () => pagamentosService.listarPagamentos(),
   });
 
   const { data: motoristasResponse } = useQuery<ApiResponse<Motorista[]>>({
@@ -165,11 +152,9 @@ export default function Pagamentos() {
     queryFn: () => motoristasService.listarMotoristas(),
   });
 
-  // Substituímos o limit: 1000 completo por uma busca de Fretes Pendentes globais
-  // Isso carrega a lista necessária para "motoristas com fretes pendentes" sem arrastar milhares de fretes faturados
   const { data: fretesResponse } = useQuery<ApiResponse<Frete[]>>({
-    queryKey: ["fretes", "pendentesGlobais"],
-    queryFn: () => fretesService.listarFretes({ status_pagamento: "pendente", limit: 200 } as any), // Fallback se 'pendentes' não tiver Rota
+    queryKey: ["fretes"],
+    queryFn: () => fretesService.listarFretes({ page: 1, limit: 1000 }),
   });
 
   const { data: custosResponse } = useQuery<ApiResponse<any[]>>({
@@ -262,10 +247,6 @@ export default function Pagamentos() {
     getDataField: (p) => p.data_pagamento,
   });
 
-  const serverMeta = pagamentosResponse?.meta as any;
-  const totalFromServer = serverMeta?.total ?? pagamentosApi.length;
-  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
-
   // Transformar dados filtrados para PagamentoMotorista
   const pagamentosFiltradosTransformados = useMemo(
     () =>
@@ -315,7 +296,11 @@ export default function Pagamentos() {
     isPdf: boolean;
   } | null>(null);
   const [selectedFretes, setSelectedFretes] = useState<string[]>([]);
-  const [isInternalCostConfirmed, setIsInternalCostConfirmed] = useState(false);  // (Estados movidos para o topo do hook)
+  const [isInternalCostConfirmed, setIsInternalCostConfirmed] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = ITEMS_PER_PAGE;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [autoEmitirGuia, setAutoEmitirGuia] = useState(true);
 
   const getComprovanteUrl = (url?: string) => {
     if (!url) return "";
@@ -393,18 +378,6 @@ export default function Pagamentos() {
     [motoristasApi]
   );
 
-  const resolveMotoristaById = (id?: string | null) => {
-    if (!id) return undefined;
-    const idString = String(id);
-    return (
-      motoristas.find((m) => String(m.id) === idString) ||
-      motoristasComPendentes.find((m) => String(m.id) === idString)
-    );
-  };
-
-  const motoristaSelecionado = resolveMotoristaById(editedPagamento.motoristaId);
-  const isInternalCostFlow = motoristaSelecionado?.tipo === "proprio";
-
   // Motoristas que possuem fretes pendentes (pagamento_id == null/0)
   const motoristasComPendentes = useMemo(() => {
     const pendentes = (fretesApi || []).filter(
@@ -452,6 +425,18 @@ export default function Pagamentos() {
 
     return uniqueById([...fromMotoristas, ...fromFretesFallback]);
   }, [motoristasApi, fretesApi]);
+
+  const resolveMotoristaById = (id?: string | null) => {
+    if (!id) return undefined;
+    const idString = String(id);
+    return (
+      motoristas.find((m) => String(m.id) === idString) ||
+      motoristasComPendentes.find((m) => String(m.id) === idString)
+    );
+  };
+
+  const motoristaSelecionado = resolveMotoristaById(editedPagamento.motoristaId);
+  const isInternalCostFlow = motoristaSelecionado?.tipo === "proprio";
 
   const fretesData = useMemo(
     () =>
@@ -516,23 +501,19 @@ export default function Pagamentos() {
   const getTotalCustosByFreteRef = (ref: string) =>
     getCustosByFreteRef(ref).reduce((sum, custo) => sum + custo.valor, 0);
 
-  // Carregar os fretes do pagamento em edição, se houver
-  const { data: fretesDoPagamentoResponse } = useQuery<ApiResponse<Frete[]>>({
-    queryKey: ["fretes", "porPagamento", editedPagamento?.id || selectedPagamento?.id],
-    queryFn: () => fretesService.listarFretes({ pagamento_id: editedPagamento?.id || selectedPagamento?.id, limit: 100 }),
-    enabled: !!(editedPagamento?.id || selectedPagamento?.id)
-  });
-
-  // Query pendentes por motorista específico (já existe)
+  // Query pendentes por motorista (carrega apenas fretes com pagamento_id == null)
   const motoristaIdForPendentes = editedPagamento?.motoristaId || null;
   const usePendentesEndpoint = import.meta.env.VITE_USE_FRETES_PENDENTES_ENDPOINT === "true";
-  const { data: fretesPendentesResponse } = useQuery<ApiResponse<Frete[]>>({
+  const {
+    data: fretesPendentesResponse,
+  } = useQuery<ApiResponse<Frete[]>>({
     queryKey: ["fretes", "pendentes", motoristaIdForPendentes],
-    queryFn: () => fretesService.listarFretesPendentes({
-      proprietarioId: String(motoristaIdForPendentes),
-      motoristaId: String(motoristaIdForPendentes),
-    }),
-    enabled: !!motoristaIdForPendentes, // Removido usePendentesEndpoint obrigatorio
+    queryFn: () =>
+      fretesService.listarFretesPendentes({
+        proprietarioId: String(motoristaIdForPendentes),
+        motoristaId: String(motoristaIdForPendentes),
+      }),
+    enabled: usePendentesEndpoint && !!motoristaIdForPendentes,
     retry: 1,
   });
 
@@ -541,7 +522,8 @@ export default function Pagamentos() {
     // O backend retorna um array de agrupamentos por proprietario/motorista
     // Ex: { proprietario_id: X, fretes: [...] }
     const flatFretes = Array.isArray(rawData) ? rawData.flatMap((group: any) => group.fretes ? group.fretes : [group]) : [];
-    return [...flatFretes, ...(fretesDoPagamentoResponse?.data || [])].map((frete: any, index: number) => ({
+
+    return flatFretes.map((frete: any, index: number) => ({
       id: String(frete.id),
       codigoFrete: formatarCodigoFrete(frete.codigo_frete || frete.id, frete.data_frete, index + 1),
       motoristaId: getFavorecidoId(frete),
@@ -553,7 +535,7 @@ export default function Pagamentos() {
       valorGerado: Number(frete.receita ?? frete.toneladas * frete.valor_por_tonelada) || 0,
       pagamentoId: frete.pagamento_id ?? null,
     }));
-  }, [fretesPendentesResponse, fretesDoPagamentoResponse]);
+  }, [fretesPendentesResponse]);
 
   const pagamentosData = useMemo(
     () =>
@@ -1214,17 +1196,27 @@ export default function Pagamentos() {
     }
   };
 
-  // A filtragem local principal foi movida para o backend/query params
-  // Mas como criamos `pagamentosFiltradosTransformados` que combina UI e dados, mantemos isso mapeado direto:
-  const paginatedData = pagamentosFiltradosTransformados;
-  // O número total de páginas já vem do meta
-  const totalPages = totalPagesFromServer;
-  const filteredData = pagamentosFiltradosTransformados; // Alias para retrocompatibilidade UI components
+  // Filtrar dados com base em busca e filtros
+  const filteredData = pagamentosFiltradosTransformados.filter((pagamento) => {
+    const matchesSearch =
+      pagamento.motoristaNome.toLowerCase().includes(search.toLowerCase()) ||
+      pagamento.id.includes(search);
+    const matchesStatus =
+      statusFilter === "all" || pagamento.statusPagamento === statusFilter;
+    const matchesMotorista =
+      motoristaFilter === "all" || pagamento.motoristaId === motoristaFilter;
+    return matchesSearch && matchesStatus && matchesMotorista;
+  });
+
+  // Lógica de paginação
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
   // Resetar para página 1 quando aplicar novos filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, motoristaFilter, tipoVisualizacao, selectedPeriodo]);
+  }, [search, statusFilter, motoristaFilter]);
 
   // Função para exportar Resumo Geral (Mockada temporariamente)
   const handleExportarGeralPDF = () => {
