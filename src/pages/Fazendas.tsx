@@ -670,7 +670,7 @@ export default function Fazendas() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-xs md:text-sm font-medium text-muted-foreground">Fazendas no período</p>
-                    <p className="text-2xl md:text-3xl font-bold tracking-tight">{fazendasFiltradas.length}</p>
+                    <p className="text-2xl md:text-3xl font-bold tracking-tight">{totalFromServer}</p>
                     <p className="text-[11px] md:text-xs text-green-600 flex items-center gap-1">
                       <Sparkles className="h-3 w-3" />
                       Produtoras ativas

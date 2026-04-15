@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
     Package, MapPin, Truck, ArrowRight, Info, FileText,
-    DollarSign, TrendingUp, AlertCircle, Edit, Trash2
+    DollarSign, TrendingUp, AlertCircle, Edit, Trash2, Fuel, Wrench
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -16,7 +16,13 @@ import pagamentosService from "@/services/pagamentos";
 
 import { cn } from "@/lib/utils";
 import { parseBRDateToLocalDate, toNumber, isCustoFromFrete, formatDateBRDisplay, formatFreteCodigo } from "@/utils/formatters";
-import { tipoConfig } from "@/pages/Custos";
+
+const tipoConfig: Record<string, { label: string; icon: any; color: string }> = {
+    combustivel: { label: "Combustível", icon: Fuel, color: "text-warning" },
+    manutencao: { label: "Manutenção", icon: Wrench, color: "text-loss" },
+    pedagio: { label: "Pedágio", icon: Truck, color: "text-primary" },
+    outros: { label: "Outros", icon: FileText, color: "text-muted-foreground" },
+};
 
 interface FreteDetailsModalProps {
     selectedFrete: any | null; // Tipagem herdada do Pai (Frete)

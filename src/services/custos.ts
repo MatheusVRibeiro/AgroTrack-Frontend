@@ -13,7 +13,7 @@ type CriarCustosEmLotePayload = {
 
 const listarCustos = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Custo[]>> => {
   try {
-    const { page = 1, limit = 50 } = params ?? {};
+    const { page = 1, limit = 10000 } = params ?? {};
     const res = await api.get("/custos", { params: { page, limit } });
     return { success: true, data: res.data.data || res.data, meta: res.data.meta, status: res.status };
   } catch (err: unknown) {

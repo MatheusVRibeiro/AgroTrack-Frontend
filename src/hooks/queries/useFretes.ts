@@ -13,6 +13,7 @@ export interface FretesQueryParams {
   caminhao_id?: string | number;
   fazenda_id?: string | number;
   search?: string;
+  fetchAll?: boolean;
 }
 
 export interface EstatisticasQueryParams {

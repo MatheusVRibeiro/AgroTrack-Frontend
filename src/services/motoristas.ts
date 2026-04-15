@@ -4,7 +4,7 @@ import type { ApiResponse, Motorista } from "@/types";
 
 export async function listarMotoristas(params?: { page?: number; limit?: number }): Promise<ApiResponse<Motorista[]>> {
   try {
-    const { page = 1, limit = 50 } = params ?? {};
+    const { page = 1, limit = 10000 } = params ?? {};
     const res = await api.get("/motoristas", { params: { page, limit } });
     // Backend retorna {success, message, data: [...]} 
     // Então res.data.data contém o array de motoristas

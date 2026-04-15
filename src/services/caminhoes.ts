@@ -12,7 +12,7 @@ export interface CaminhoesQueryParams {
 
 export async function listarCaminhoes(params?: CaminhoesQueryParams): Promise<ApiResponse<Caminhao[]>> {
   try {
-    const { page = 1, limit = 50, ...filtros } = params ?? {};
+    const { page = 1, limit = 10000, ...filtros } = params ?? {};
     
     const filtrosLimpos = Object.fromEntries(
       Object.entries(filtros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")

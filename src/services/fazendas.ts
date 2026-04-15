@@ -86,7 +86,7 @@ const normalizePayloadToBackend = (payload: CriarFazendaPayload | Partial<CriarF
 
 const listarFazendas = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Fazenda[]>> => {
   try {
-    const { page = 1, limit = 50 } = params ?? {};
+    const { page = 1, limit = 10000 } = params ?? {};
     const res = await api.get("/fazendas", { params: { page, limit } });
     const data = normalizeListResponse(res.data.data || res.data);
     return { success: true, data, meta: res.data.meta, status: res.status };

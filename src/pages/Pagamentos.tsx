@@ -168,6 +168,9 @@ export default function Pagamentos() {
   });
 
   const pagamentosApi: Pagamento[] = pagamentosResponse?.data || [];
+  const serverMeta = pagamentosResponse?.meta as any;
+  const totalFromServer = serverMeta?.total ?? pagamentosApi.length;
+
   const motoristasApi: Motorista[] = motoristasResponse?.data || [];
   const fretesApi: Frete[] = fretesResponse?.data || [];
   const custosApi: any[] = custosResponse?.data || [];
@@ -1384,6 +1387,7 @@ export default function Pagamentos() {
       <PaymentSummaryCards
         pagamentos={pagamentosFiltradosTransformados}
         dadosMesAnterior={dadosMesAnterior}
+        totalRegistros={totalFromServer}
       />
 
       {/* Filtros Mobile e Desktop Componentizados */}

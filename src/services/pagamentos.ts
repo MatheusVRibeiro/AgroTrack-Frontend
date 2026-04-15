@@ -4,7 +4,7 @@ import type { ApiResponse, Pagamento, CriarPagamentoPayload, AtualizarPagamentoP
 
 const listarPagamentos = async (params?: Record<string, any>): Promise<ApiResponse<Pagamento[]>> => {
   try {
-    const { page = 1, limit = 50, ...outros } = params ?? {};
+    const { page = 1, limit = 10000, ...outros } = params ?? {};
     const filtrosLimpos = Object.fromEntries(
       Object.entries(outros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
     );

@@ -426,7 +426,7 @@ export default function Motoristas() {
     setCurrentPage(1);
   }, [search, statusFilter, tipoFilter]);
 
-  const totalMotoristas = motoristasState.length;
+  const totalMotoristas = totalFromServer;
   const totalAtivos = motoristasState.filter((m) => m.status === "ativo").length;
   const totalInativos = motoristasState.filter((m) => m.status === "inativo").length;
   const totalTerceirizados = motoristasState.filter((m) => m.tipo === "terceirizado").length;
@@ -701,7 +701,7 @@ export default function Motoristas() {
               </Button>
             </div>
             <p className="text-xs text-center text-muted-foreground">
-              {totalFromServer} registros
+              Total de {totalFromServer} registros no banco
             </p>
           </div>
 

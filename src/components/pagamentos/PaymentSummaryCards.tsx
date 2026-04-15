@@ -8,11 +8,13 @@ interface PaymentSummaryCardsProps {
     dadosMesAnterior: {
         totalPago: number;
     };
+    totalRegistros?: number;
 }
 
 export function PaymentSummaryCards({
     pagamentos,
     dadosMesAnterior,
+    totalRegistros,
 }: PaymentSummaryCardsProps) {
     const totalPendente = pagamentos
         .filter((p) => p.statusPagamento === "pendente")
@@ -25,6 +27,8 @@ export function PaymentSummaryCards({
     const pendentesCount = pagamentos.filter((p) => p.statusPagamento === "pendente").length;
     const pagosCount = pagamentos.filter((p) => p.statusPagamento === "pago").length;
 
+    const displayedTotal = totalRegistros ?? pagamentos.length;
+
     const variacao = dadosMesAnterior.totalPago > 0
         ? ((totalPagoAtual - dadosMesAnterior.totalPago) / dadosMesAnterior.totalPago) * 100
         : 0;
@@ -36,9 +40,9 @@ export function PaymentSummaryCards({
                 <div className="flex items-center justify-between">
                     <div>
                         <p className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total de Registros</p>
-                        <p className="text-2xl md:text-4xl font-bold mt-2 text-foreground">{pagamentos.length}</p>
+                        <p className="text-2xl md:text-4xl font-bold mt-2 text-foreground">{displayedTotal}</p>
                         <p className="text-[10px] md:text-xs text-primary mt-2 flex items-center gap-1">
-                            {pagamentos.length === 0 ? "Nenhum pagamento neste período" : "Pagamentos cadastrados"}
+                            {displayedTotal === 0 ? "Nenhum pagamento neste período" : "Pagamentos cadastrados"}
                         </p>
                     </div>
                     <FileText className="h-8 w-8 md:h-12 md:w-12 text-primary/20" />

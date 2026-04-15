@@ -358,8 +358,21 @@ export default function Fretes() {
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
   // Estados para Exercício (Ano/Mês) e Fechamento
-  const [tipoVisualizacao, setTipoVisualizacao] = useState<"mensal" | "trimestral" | "semestral" | "anual">("mensal");
-  const [selectedPeriodo, setSelectedPeriodo] = useState(format(new Date(), "yyyy-MM")); // Mês atual
+  const defaultVisualizacao = (localStorage.getItem("fretes_tipoVisualizacao") as any) || "anual";
+  const [tipoVisualizacao, setTipoVisualizacao] = useState<"mensal" | "trimestral" | "semestral" | "anual">(defaultVisualizacao);
+  
+  const [selectedPeriodo, setSelectedPeriodo] = useState(() => {
+    const defaultData = new Date();
+    if (defaultVisualizacao === "anual") return String(defaultData.getFullYear());
+    if (defaultVisualizacao === "semestral") return `${defaultData.getFullYear()}-S${defaultData.getMonth() + 1 <= 6 ? 1 : 2}`;
+    if (defaultVisualizacao === "trimestral") return `${defaultData.getFullYear()}-T${Math.ceil((defaultData.getMonth() + 1) / 3)}`;
+    return format(defaultData, "yyyy-MM");
+  });
+
+  useEffect(() => {
+    localStorage.setItem("fretes_tipoVisualizacao", tipoVisualizacao);
+  }, [tipoVisualizacao]);
+
   const [filtersOpen, setFiltersOpen] = useState(false); // Controle do Sheet de filtros mobile
 
   // Dados históricos para comparação (simulado - mes anterior)
@@ -589,6 +602,46 @@ export default function Fretes() {
       setSelectedPeriodo(periodosUnicos[periodosUnicos.length - 1]);
     }
   }, [fretesState, tipoVisualizacao, selectedPeriodo]);
+
+  const handleOpenLoteModal = async () => {
+    toast.loading("📂 Carregando fazendas...");
+    const res = await fazendasService.listarFazendas();
+    toast.dismiss();
+    
+    if (res.success && res.data) {
+      const fazendasFormatadas: EstoqueFazenda[] = res.data
+        .filter((f) => !f.colheita_finalizada)
+        .map((f) => ({
+          id: f.id,
+          fazendaId: f.id,
+          fazenda: f.fazenda,
+          estado: f.estado || "",
+          mercadoria: f.mercadoria,
+          variedade: f.variedade || "",
+          quantidadeSacas: f.total_sacas_carregadas || 0,
+          quantidadeInicial: f.total_sacas_carregadas || 0,
+          precoPorTonelada: f.preco_por_tonelada || 0,
+          pesoMedioSaca: f.peso_medio_saca || 25,
+          safra: f.safra || "",
+          colheitaFinalizada: f.colheita_finalizada || false,
+        }));
+        
+      setEstoquesFazendas(sortFazendasPorNome(fazendasFormatadas));
+      
+      if (fazendasFormatadas.length === 0) {
+        toast.warning("⚠️ Nenhuma fazenda com estoque disponível", {
+          description: "Todas as fazendas já finalizaram a colheita. Você não poderá lançar fretes se não houver estoque.",
+        });
+      }
+    } else {
+      toast.error("❌ Erro ao carregar fazendas", {
+        description: res.message || "Tente novamente em alguns momentos.",
+      });
+      setEstoquesFazendas([]);
+    }
+
+    setIsLoteOpen(true);
+  };
 
   const handleOpenNewModal = async () => {
     toast.loading("📂 Carregando fazendas...");
@@ -1833,7 +1886,7 @@ export default function Fretes() {
             </Button>
 
             {/* Botão Lançar em Lote */}
-            <Button onClick={() => setIsLoteOpen(true)} className="ml-2">
+            <Button onClick={handleOpenLoteModal} className="ml-2">
               <Package className="h-4 w-4 mr-2" />
               Lançar em lote
             </Button>
@@ -2300,18 +2353,24 @@ export default function Fretes() {
                   ? Math.round((f.toneladas * 1000) / (f.estoqueSelecionado.pesoMedioSaca || 25))
                   : 0;
 
+                const toUpper = (value: string) => value.trim().toUpperCase();
+                const toUpperOrUndefined = (value?: string | null) => {
+                  const trimmed = (value ?? "").trim();
+                  return trimmed ? trimmed.toUpperCase() : undefined;
+                };
+
                 const payload = {
-                  origem: `${f.estoqueSelecionado.fazenda} - ${f.estoqueSelecionado.estado}`,
-                  destino: f.destino,
+                  origem: toUpper(`${f.estoqueSelecionado.fazenda} - ${f.estoqueSelecionado.estado}`),
+                  destino: toUpper(f.destino),
                   motorista_id: String(motoristaId),
-                  motorista_nome: motorista ? motorista.nome : "",
+                  motorista_nome: motorista ? toUpper(motorista.nome) : "",
                   caminhao_id: String(caminhaoId),
-                  caminhao_placa: caminhao ? caminhao.placa : "",
+                  caminhao_placa: caminhao ? toUpper(caminhao.placa) : "",
                   fazenda_id: String(f.estoqueSelecionado.id),
-                  fazenda_nome: f.estoqueSelecionado.fazenda,
-                  mercadoria: f.estoqueSelecionado.mercadoria,
+                  fazenda_nome: toUpper(f.estoqueSelecionado.fazenda),
+                  mercadoria: toUpper(f.estoqueSelecionado.mercadoria),
                   mercadoria_id: String(f.estoqueSelecionado.id),
-                  variedade: f.estoqueSelecionado.variedade || undefined,
+                  variedade: toUpperOrUndefined(f.estoqueSelecionado.variedade),
                   data_frete: f.dataFrete,
                   quantidade_sacas: quantidadeSacas,
                   toneladas: f.toneladas,

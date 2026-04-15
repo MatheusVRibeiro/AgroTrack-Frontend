@@ -27,11 +27,16 @@ export async function listarFretes(params?: {
   fazenda_id?: string | number;
   pagamento_id?: string | number; // Added so we can fetch fretes by payment
   search?: string;
+  fetchAll?: boolean;
 }): Promise<ApiResponse<Frete[]>> {
   try {
-    const { page = 1, limit = 50, ...outros } = params ?? {};
+    const { page = 1, limit = 10000, fetchAll, ...outros } = params ?? {};
+    
+    // Se for fetchAll, forçamos o limite a ser máximo ou omitimos, e evitamos a paginação padrão.
+    const _limit = fetchAll ? 10000 : limit;
+
     const res = await api.get<BackendFretesResponse>("/fretes", {
-      params: { page, limit, ...outros },
+      params: { page, limit: _limit, fetchAll, ...outros },
     });
 
     if (res.data.success && res.data.data) {

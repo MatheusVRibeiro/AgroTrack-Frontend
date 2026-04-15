@@ -1,0 +1,358 @@
+diff --git a/src/components/fretes/FreteDetailsModal.tsx b/src/components/fretes/FreteDetailsModal.tsx
+index 3585a98..de55093 100644
+--- a/src/components/fretes/FreteDetailsModal.tsx
++++ b/src/components/fretes/FreteDetailsModal.tsx
+@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
+ import { Separator } from "@/components/ui/separator";
+ import {
+     Package, MapPin, Truck, ArrowRight, Info, FileText,
+-    DollarSign, TrendingUp, AlertCircle, Edit, Trash2
++    DollarSign, TrendingUp, AlertCircle, Edit, Trash2, Fuel, Wrench
+ } from "lucide-react";
+ import { useState, useEffect } from "react";
+ 
+@@ -16,7 +16,13 @@ import pagamentosService from "@/services/pagamentos";
+ 
+ import { cn } from "@/lib/utils";
+ import { parseBRDateToLocalDate, toNumber, isCustoFromFrete, formatDateBRDisplay, formatFreteCodigo } from "@/utils/formatters";
+-import { tipoConfig } from "@/pages/Custos";
++
++const tipoConfig: Record<string, { label: string; icon: any; color: string }> = {
++    combustivel: { label: "Combustível", icon: Fuel, color: "text-warning" },
++    manutencao: { label: "Manutenção", icon: Wrench, color: "text-loss" },
++    pedagio: { label: "Pedágio", icon: Truck, color: "text-primary" },
++    outros: { label: "Outros", icon: FileText, color: "text-muted-foreground" },
++};
+ 
+ interface FreteDetailsModalProps {
+     selectedFrete: any | null; // Tipagem herdada do Pai (Frete)
+diff --git a/src/components/pagamentos/PaymentSummaryCards.tsx b/src/components/pagamentos/PaymentSummaryCards.tsx
+index 6a9decb..6a57a9c 100644
+--- a/src/components/pagamentos/PaymentSummaryCards.tsx
++++ b/src/components/pagamentos/PaymentSummaryCards.tsx
+@@ -8,11 +8,13 @@ interface PaymentSummaryCardsProps {
+     dadosMesAnterior: {
+         totalPago: number;
+     };
++    totalRegistros?: number;
+ }
+ 
+ export function PaymentSummaryCards({
+     pagamentos,
+     dadosMesAnterior,
++    totalRegistros,
+ }: PaymentSummaryCardsProps) {
+     const totalPendente = pagamentos
+         .filter((p) => p.statusPagamento === "pendente")
+@@ -25,6 +27,8 @@ export function PaymentSummaryCards({
+     const pendentesCount = pagamentos.filter((p) => p.statusPagamento === "pendente").length;
+     const pagosCount = pagamentos.filter((p) => p.statusPagamento === "pago").length;
+ 
++    const displayedTotal = totalRegistros ?? pagamentos.length;
++
+     const variacao = dadosMesAnterior.totalPago > 0
+         ? ((totalPagoAtual - dadosMesAnterior.totalPago) / dadosMesAnterior.totalPago) * 100
+         : 0;
+@@ -36,9 +40,9 @@ export function PaymentSummaryCards({
+                 <div className="flex items-center justify-between">
+                     <div>
+                         <p className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total de Registros</p>
+-                        <p className="text-2xl md:text-4xl font-bold mt-2 text-foreground">{pagamentos.length}</p>
++                        <p className="text-2xl md:text-4xl font-bold mt-2 text-foreground">{displayedTotal}</p>
+                         <p className="text-[10px] md:text-xs text-primary mt-2 flex items-center gap-1">
+-                            {pagamentos.length === 0 ? "Nenhum pagamento neste período" : "Pagamentos cadastrados"}
++                            {displayedTotal === 0 ? "Nenhum pagamento neste período" : "Pagamentos cadastrados"}
+                         </p>
+                     </div>
+                     <FileText className="h-8 w-8 md:h-12 md:w-12 text-primary/20" />
+diff --git a/src/hooks/queries/useFretes.ts b/src/hooks/queries/useFretes.ts
+index 59b24cb..c0568ee 100644
+--- a/src/hooks/queries/useFretes.ts
++++ b/src/hooks/queries/useFretes.ts
+@@ -13,6 +13,7 @@ export interface FretesQueryParams {
+   caminhao_id?: string | number;
+   fazenda_id?: string | number;
+   search?: string;
++  fetchAll?: boolean;
+ }
+ 
+ export interface EstatisticasQueryParams {
+diff --git a/src/pages/Fazendas.tsx b/src/pages/Fazendas.tsx
+index 0f87e64..3bbe184 100644
+--- a/src/pages/Fazendas.tsx
++++ b/src/pages/Fazendas.tsx
+@@ -670,7 +670,7 @@ export default function Fazendas() {
+                 <div className="flex items-center justify-between">
+                   <div className="space-y-1">
+                     <p className="text-xs md:text-sm font-medium text-muted-foreground">Fazendas no período</p>
+-                    <p className="text-2xl md:text-3xl font-bold tracking-tight">{fazendasFiltradas.length}</p>
++                    <p className="text-2xl md:text-3xl font-bold tracking-tight">{totalFromServer}</p>
+                     <p className="text-[11px] md:text-xs text-green-600 flex items-center gap-1">
+                       <Sparkles className="h-3 w-3" />
+                       Produtoras ativas
+diff --git a/src/pages/Frota.tsx b/src/pages/Frota.tsx
+index 1933ea6..115c27f 100644
+--- a/src/pages/Frota.tsx
++++ b/src/pages/Frota.tsx
+@@ -85,12 +85,12 @@ export default function Frota() {
+   const itemsPerPage = 21;
+   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
+ 
+-  // Query para buscar caminhões (Server-Side)
++  // Query para buscar caminhões (Fetch ALL para contornar limitação do backend e fazer paginação client-side)
+   const { data: caminhoesResponse, isLoading } = useQuery({
+-    queryKey: ["caminhoes", currentPage, itemsPerPage, search, statusFilter, fleetFilter],
++    queryKey: ["caminhoes", search, statusFilter, fleetFilter],
+     queryFn: () => caminhoesService.listarCaminhoes({
+-      page: currentPage,
+-      limit: itemsPerPage,
++      page: 1,
++      limit: 10000,
+       search,
+       status: statusFilter,
+       proprietario_tipo: fleetFilter === "proprio" ? "PROPRIO" : fleetFilter === "terceiro" ? "TERCEIRO" : undefined
+@@ -102,14 +102,15 @@ export default function Frota() {
+   // Query para buscar motoristas
+   const { data: motoristasResponse, isLoading: isLoadingMotoristas } = useQuery({
+     queryKey: ["motoristas"],
+-    queryFn: () => motoristasService.listarMotoristas(),
++    queryFn: () => motoristasService.listarMotoristas({ limit: 10000 }),
+     refetchOnMount: "always",
+   });
+ 
+   const caminhoes = caminhoesResponse?.data || [];
+   const serverMeta = caminhoesResponse?.meta as any;
+   const totalFromServer = serverMeta?.total ?? caminhoes.length;
+-  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
++  // A paginação será client-side agora, então:
++  const totalPages = Math.ceil(caminhoes.length / itemsPerPage);
+ 
+   const motoristasDisponiveis = sortMotoristasPorNome(motoristasResponse?.data || []);
+   const transportadoraContelli = motoristasDisponiveis.find(
+@@ -423,9 +424,7 @@ export default function Frota() {
+   const categoriasAtivasCount = new Set(caminhoes.map((c) => c.tipo_veiculo).filter(Boolean)).size;
+ 
+   // Lógica de paginação principal
+-  const totalPages = totalPagesFromServer;
+-  
+-  // Utilizar diretamente a resposta do servidor:
++  // Utilizar diretamente a resposta do servidor, agora com paginação client-side completa
+   const orderedData = [...caminhoes].sort((a, b) => {
+     const aType = getFleetType(a) === "PROPRIO" ? 0 : 1;
+     const bType = getFleetType(b) === "PROPRIO" ? 0 : 1;
+@@ -433,7 +432,8 @@ export default function Frota() {
+     return a.modelo.localeCompare(b.modelo, "pt-BR");
+   });
+   
+-  const paginatedData = orderedData;
++  const startIndex = (currentPage - 1) * itemsPerPage;
++  const paginatedData = orderedData.slice(startIndex, startIndex + itemsPerPage);
+   const paginatedProprios = paginatedData.filter((c) => getFleetType(c) === "PROPRIO");
+   const paginatedTerceiros = paginatedData.filter((c) => getFleetType(c) === "TERCEIRO");
+ 
+@@ -833,7 +833,7 @@ export default function Frota() {
+             </div>
+             <div>
+               <p className="text-xs text-muted-foreground">Total de Veículos</p>
+-              <p className="text-xl font-bold text-green-700 dark:text-green-400">{caminhoes.length}</p>
++              <p className="text-xl font-bold text-green-700 dark:text-green-400">{totalFromServer}</p>
+             </div>
+           </div>
+         </Card>
+diff --git a/src/pages/Motoristas.tsx b/src/pages/Motoristas.tsx
+index ff578eb..5c0fdb6 100644
+--- a/src/pages/Motoristas.tsx
++++ b/src/pages/Motoristas.tsx
+@@ -113,16 +113,50 @@ export default function Motoristas() {
+     data: motoristasResponse,
+     isLoading: isLoadingMotoristas,
+     refetch: recarregarMotoristas,
+-  } = useMotoristas({ page: currentPage, limit: itemsPerPage, search, status: statusFilter, tipo: tipoFilter });
++  } = useMotoristas({ limit: 10000 });
++  
+   const { data: fretesResponse } = useFretes();
+ 
+-  const motoristasState: Motorista[] = useMemo(
++  const allMotoristas = useMemo(
+     () => sortMotoristasPorNome(motoristasResponse?.data || []),
+     [motoristasResponse?.data]
+   );
++  
++  // Client-side filtering
++  const filteredMotoristas = useMemo(() => {
++    let filtered = allMotoristas;
++
++    // Busca (Search)
++    if (search.trim()) {
++      const termo = search.toLowerCase();
++      filtered = filtered.filter(
++        (m) =>
++          (m.nome ?? "").toLowerCase().includes(termo) ||
++          (m.cpf_cnpj ?? "").toLowerCase().includes(termo) ||
++          (m.cnh ?? "").toLowerCase().includes(termo)
++      );
++    }
++
++    // Status
++    if (statusFilter && statusFilter !== "all") {
++      filtered = filtered.filter((m) => m.status === statusFilter);
++    }
++
++    // Tipo
++    if (tipoFilter && tipoFilter !== "all") {
++      filtered = filtered.filter((m) => m.tipo === tipoFilter);
++    }
++
++    return filtered;
++  }, [allMotoristas, search, statusFilter, tipoFilter]);
++
++  // Client-side pagination
++  const startIndex = (currentPage - 1) * itemsPerPage;
++  const motoristasState = filteredMotoristas.slice(startIndex, startIndex + itemsPerPage);
++
+   const serverMeta = motoristasResponse?.meta as any;
+-  const totalFromServer = serverMeta?.total ?? motoristasState.length;
+-  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
++  const totalFromServer = serverMeta?.total ?? allMotoristas.length;
++  const totalPages = Math.ceil(filteredMotoristas.length / itemsPerPage);
+ 
+   const fretesApi = fretesResponse?.data || [];
+   const editRouteHandledRef = useRef<string | null>(null);
+@@ -414,8 +448,7 @@ export default function Motoristas() {
+   });
+ 
+   // Lógica de paginação principal
+-  const totalPages = totalPagesFromServer;
+-  const paginatedData = sortedData; // Itens que vieram do servidor já são a página correta
++  const paginatedData = sortedData;
+ 
+   useEffect(() => {
+     setCurrentPage(1);
+@@ -426,7 +459,7 @@ export default function Motoristas() {
+     setCurrentPage(1);
+   }, [search, statusFilter, tipoFilter]);
+ 
+-  const totalMotoristas = motoristasState.length;
++  const totalMotoristas = totalFromServer;
+   const totalAtivos = motoristasState.filter((m) => m.status === "ativo").length;
+   const totalInativos = motoristasState.filter((m) => m.status === "inativo").length;
+   const totalTerceirizados = motoristasState.filter((m) => m.tipo === "terceirizado").length;
+@@ -701,7 +734,7 @@ export default function Motoristas() {
+               </Button>
+             </div>
+             <p className="text-xs text-center text-muted-foreground">
+-              {totalFromServer} registros
++              Total de {totalFromServer} registros no banco
+             </p>
+           </div>
+ 
+diff --git a/src/pages/Pagamentos.tsx b/src/pages/Pagamentos.tsx
+index 1ca27e6..f4b77bb 100644
+--- a/src/pages/Pagamentos.tsx
++++ b/src/pages/Pagamentos.tsx
+@@ -168,6 +168,9 @@ export default function Pagamentos() {
+   });
+ 
+   const pagamentosApi: Pagamento[] = pagamentosResponse?.data || [];
++  const serverMeta = pagamentosResponse?.meta as any;
++  const totalFromServer = serverMeta?.total ?? pagamentosApi.length;
++
+   const motoristasApi: Motorista[] = motoristasResponse?.data || [];
+   const fretesApi: Frete[] = fretesResponse?.data || [];
+   const custosApi: any[] = custosResponse?.data || [];
+@@ -1384,6 +1387,7 @@ export default function Pagamentos() {
+       <PaymentSummaryCards
+         pagamentos={pagamentosFiltradosTransformados}
+         dadosMesAnterior={dadosMesAnterior}
++        totalRegistros={totalFromServer}
+       />
+ 
+       {/* Filtros Mobile e Desktop Componentizados */}
+diff --git a/src/services/caminhoes.ts b/src/services/caminhoes.ts
+index e3fb7a6..c688407 100644
+--- a/src/services/caminhoes.ts
++++ b/src/services/caminhoes.ts
+@@ -12,7 +12,7 @@ export interface CaminhoesQueryParams {
+ 
+ export async function listarCaminhoes(params?: CaminhoesQueryParams): Promise<ApiResponse<Caminhao[]>> {
+   try {
+-    const { page = 1, limit = 50, ...filtros } = params ?? {};
++    const { page = 1, limit = 10000, ...filtros } = params ?? {};
+     
+     const filtrosLimpos = Object.fromEntries(
+       Object.entries(filtros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
+diff --git a/src/services/custos.ts b/src/services/custos.ts
+index b16fc4c..283e31e 100644
+--- a/src/services/custos.ts
++++ b/src/services/custos.ts
+@@ -13,7 +13,7 @@ type CriarCustosEmLotePayload = {
+ 
+ const listarCustos = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Custo[]>> => {
+   try {
+-    const { page = 1, limit = 50 } = params ?? {};
++    const { page = 1, limit = 10000 } = params ?? {};
+     const res = await api.get("/custos", { params: { page, limit } });
+     return { success: true, data: res.data.data || res.data, meta: res.data.meta, status: res.status };
+   } catch (err: unknown) {
+diff --git a/src/services/fazendas.ts b/src/services/fazendas.ts
+index 6c2a216..3c0d424 100644
+--- a/src/services/fazendas.ts
++++ b/src/services/fazendas.ts
+@@ -86,7 +86,7 @@ const normalizePayloadToBackend = (payload: CriarFazendaPayload | Partial<CriarF
+ 
+ const listarFazendas = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Fazenda[]>> => {
+   try {
+-    const { page = 1, limit = 50 } = params ?? {};
++    const { page = 1, limit = 10000 } = params ?? {};
+     const res = await api.get("/fazendas", { params: { page, limit } });
+     const data = normalizeListResponse(res.data.data || res.data);
+     return { success: true, data, meta: res.data.meta, status: res.status };
+diff --git a/src/services/fretes.ts b/src/services/fretes.ts
+index 5c88bf8..61f801d 100644
+--- a/src/services/fretes.ts
++++ b/src/services/fretes.ts
+@@ -27,11 +27,16 @@ export async function listarFretes(params?: {
+   fazenda_id?: string | number;
+   pagamento_id?: string | number; // Added so we can fetch fretes by payment
+   search?: string;
++  fetchAll?: boolean;
+ }): Promise<ApiResponse<Frete[]>> {
+   try {
+-    const { page = 1, limit = 50, ...outros } = params ?? {};
++    const { page = 1, limit = 10000, fetchAll, ...outros } = params ?? {};
++    
++    // Se for fetchAll, forçamos o limite a ser máximo ou omitimos, e evitamos a paginação padrão.
++    const _limit = fetchAll ? 10000 : limit;
++
+     const res = await api.get<BackendFretesResponse>("/fretes", {
+-      params: { page, limit, ...outros },
++      params: { page, limit: _limit, fetchAll, ...outros },
+     });
+ 
+     if (res.data.success && res.data.data) {
+diff --git a/src/services/motoristas.ts b/src/services/motoristas.ts
+index b6e8376..4de95d5 100644
+--- a/src/services/motoristas.ts
++++ b/src/services/motoristas.ts
+@@ -4,7 +4,7 @@ import type { ApiResponse, Motorista } from "@/types";
+ 
+ export async function listarMotoristas(params?: { page?: number; limit?: number }): Promise<ApiResponse<Motorista[]>> {
+   try {
+-    const { page = 1, limit = 50 } = params ?? {};
++    const { page = 1, limit = 10000 } = params ?? {};
+     const res = await api.get("/motoristas", { params: { page, limit } });
+     // Backend retorna {success, message, data: [...]} 
+     // Então res.data.data contém o array de motoristas
+diff --git a/src/services/pagamentos.ts b/src/services/pagamentos.ts
+index 46df404..d7f8909 100644
+--- a/src/services/pagamentos.ts
++++ b/src/services/pagamentos.ts
+@@ -4,7 +4,7 @@ import type { ApiResponse, Pagamento, CriarPagamentoPayload, AtualizarPagamentoP
+ 
+ const listarPagamentos = async (params?: Record<string, any>): Promise<ApiResponse<Pagamento[]>> => {
+   try {
+-    const { page = 1, limit = 50, ...outros } = params ?? {};
++    const { page = 1, limit = 10000, ...outros } = params ?? {};
+     const filtrosLimpos = Object.fromEntries(
+       Object.entries(outros).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
+     );
