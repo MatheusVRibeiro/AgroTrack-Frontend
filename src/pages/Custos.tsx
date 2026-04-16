@@ -1,3 +1,6 @@
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PeriodoFilter } from "@/components/shared/PeriodoFilter";
@@ -131,7 +134,6 @@ export default function Custos() {
       subtitle: "Gestão de despesas e custos operacionais"
     });
   }, [setHeader]);
-  const queryClient = useQueryClient();
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
   // Parâmetros de filtro server-side
@@ -872,7 +874,7 @@ export default function Custos() {
     : "—";
 
   return (
-    <MainLayout title="Custos" subtitle="Gestão de custos operacionais">
+    <div className="animate-in fade-in duration-500">
       <RefreshingIndicator isRefreshing={isRefreshing} />
       <PageHeader
         title="Custos"
@@ -1876,6 +1878,6 @@ export default function Custos() {
         variant="danger"
         onConfirm={handleConfirmDelete}
       />
-    </MainLayout>
+    </div>
   );
 }
