@@ -1,8 +1,8 @@
-import { useShake } from "@/hooks/useShake";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
+import { useShake } from "@/hooks/useShake";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PeriodoFilter } from "@/components/shared/PeriodoFilter";
 import { FilterBar } from "@/components/shared/FilterBar";
@@ -141,6 +141,14 @@ const uniqueById = <T extends { id: string | number }>(items: T[]): T[] => {
 
 export default function Pagamentos() {
   const queryClient = useQueryClient();
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Pagamentos",
+      subtitle: "Registro de pagamentos por proprietário/favorecido"
+    });
+  }, [setHeader]);
 
   const { data: pagamentosResponse, isLoading: isLoadingPagamentos } = useQuery<ApiResponse<Pagamento[]>>({
     queryKey: ["pagamentos"],
@@ -1341,19 +1349,17 @@ export default function Pagamentos() {
 
   if (isLoadingPagamentos) {
     return (
-      <MainLayout title="Pagamentos" subtitle="Registro de pagamentos por proprietário/favorecido">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground">Carregando pagamentos...</p>
-          </div>
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Carregando pagamentos...</p>
         </div>
-      </MainLayout>
+      </div>
     );
   }
 
   return (
-    <MainLayout title="Pagamentos" subtitle="Registro de pagamentos por proprietário/favorecido">
+    <div className="animate-in fade-in duration-500">
       <PageHeader
         title="Pagamentos por Favorecido"
         description="Registre e acompanhe os pagamentos pelos fretes realizados"
@@ -1496,6 +1502,6 @@ export default function Pagamentos() {
         variant="danger"
         onConfirm={handleConfirmDeletePagamento}
       />
-    </MainLayout>
+    </div>
   );
 }

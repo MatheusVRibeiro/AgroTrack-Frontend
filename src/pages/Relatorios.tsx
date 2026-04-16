@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { useState, useMemo, useEffect } from "react";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
@@ -258,6 +258,14 @@ const pagamentosData: PagamentoRelatorio[] = [
 ];
 
 export default function Relatorios() {
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Relatórios",
+      subtitle: "Análise detalhada por motorista"
+    });
+  }, [setHeader]);
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
   const [motorista, setMotorista] = useState<string>("all");
@@ -550,7 +558,7 @@ export default function Relatorios() {
   ];
 
   return (
-    <MainLayout title="Relatórios" subtitle="Análise detalhada por motorista">
+    <div className="animate-in fade-in duration-500">
       <div className="space-y-4 mb-6">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
@@ -1479,6 +1487,6 @@ export default function Relatorios() {
           </Card>
         </TabsContent>
       </Tabs>
-    </MainLayout>
+    </div>
   );
 }

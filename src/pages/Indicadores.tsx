@@ -1,4 +1,5 @@
-import { MainLayout } from "@/components/layout/MainLayout";
+import { useEffect } from "react";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -91,8 +92,17 @@ const rankingMotoristas = [
 ];
 
 export default function Indicadores() {
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Indicadores",
+      subtitle: "KPIs e métricas de desempenho"
+    });
+  }, [setHeader]);
+
   return (
-    <MainLayout title="Indicadores" subtitle="KPIs e métricas de desempenho">
+    <div className="animate-in fade-in duration-500">
       <PageHeader
         title="Indicadores de Desempenho"
         description="Acompanhe as principais métricas do negócio"
@@ -291,6 +301,6 @@ export default function Indicadores() {
           </div>
         </CardContent>
       </Card>
-    </MainLayout>
+    </div>
   );
 }

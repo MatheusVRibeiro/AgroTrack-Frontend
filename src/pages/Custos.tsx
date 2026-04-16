@@ -1,7 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PeriodoFilter } from "@/components/shared/PeriodoFilter";
 import { FilterBar } from "@/components/shared/FilterBar";
@@ -124,7 +121,16 @@ const formatFreteSelect = (frete: Frete): string => {
 
 
 export default function Custos() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Custos",
+      subtitle: "Gestão de despesas e custos operacionais"
+    });
+  }, [setHeader]);
   const queryClient = useQueryClient();
   const { isRefreshing, startRefresh, endRefresh } = useRefreshData();
 
@@ -711,14 +717,12 @@ export default function Custos() {
 
   if (isLoading) {
     return (
-      <MainLayout title="Custos" subtitle="Gestão de custos operacionais">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground">Carregando custos...</p>
-          </div>
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Carregando custos...</p>
         </div>
-      </MainLayout>
+      </div>
     );
   }
 

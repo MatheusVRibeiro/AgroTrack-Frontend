@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { MonthlyComparison } from "@/components/dashboard/MonthlyComparison";
 import { SmartAlerts, SmartAlert } from "@/components/dashboard/SmartAlerts";
@@ -135,6 +135,15 @@ const smartAlerts: SmartAlert[] = [
 ];
 
 export default function Dashboard() {
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Dashboard",
+      subtitle: "Visão geral de estoques de fazendas, operações de logística e resultados financeiros"
+    });
+  }, [setHeader]);
+
   const isMobile = useIsMobile();
   const [alerts, setAlerts] = useState(smartAlerts);
   const [modalAberto, setModalAberto] = useState<"sacas" | "ocupacao" | "custos" | "resultado" | null>(null);
@@ -486,10 +495,7 @@ export default function Dashboard() {
   });
 
   return (
-    <MainLayout
-      title="Dashboard"
-      subtitle="Visão geral de estoques de fazendas, operações de logística e resultados financeiros"
-    >
+    <div className="animate-in fade-in duration-500">
       {/* ===== SEÇÃO 1: ESTOQUES DE FAZENDAS (INFORMAÇÕES PRINCIPAIS) ===== */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -1011,6 +1017,6 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </div>
   );
 }

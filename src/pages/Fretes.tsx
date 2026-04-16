@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
@@ -256,6 +256,14 @@ const custosData: Custo[] = [
 
 export default function Fretes() {
   const queryClient = useQueryClient();
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Fretes",
+      subtitle: "Gestão de fretes e entregas"
+    });
+  }, [setHeader]);
 
   const [search, setSearch] = useState("");
   const [motoristaFilter, setMotoristaFilter] = useState("all");
@@ -1808,7 +1816,7 @@ export default function Fretes() {
   };
 
   return (
-    <MainLayout title="Fretes" subtitle="Gestão de fretes e entregas">
+    <div className="animate-in fade-in duration-500">
       <RefreshingIndicator isRefreshing={isRefreshing} />
       <PageHeader
         title="Fretes"
@@ -2414,6 +2422,6 @@ export default function Fretes() {
           }
         }}
       />
-    </MainLayout>
+    </div>
   );
 }

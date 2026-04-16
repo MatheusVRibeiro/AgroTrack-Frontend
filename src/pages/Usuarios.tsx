@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
@@ -116,6 +116,14 @@ function isBloqueado(bloqueado_ate: string | null | undefined): boolean {
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export default function Usuarios() {
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Usuários",
+      subtitle: "Gerenciamento de acessos ao sistema"
+    });
+  }, [setHeader]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -361,7 +369,7 @@ export default function Usuarios() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <MainLayout title="Usuários" subtitle="Gerenciamento de acessos">
+    <div className="animate-in fade-in duration-500">
       <PageHeader
         title="Usuários"
         description="Gerencie os acessos ao sistema"
@@ -824,6 +832,6 @@ export default function Usuarios() {
       >
         <Plus className="h-6 w-6" />
       </Button>
-    </MainLayout>
+    </div>
   );
 }

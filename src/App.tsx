@@ -8,6 +8,7 @@ import { AuthProvider } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { ThemeProvider } from "@/components/theme-provider";
+import { MainLayout } from "@/components/layout/MainLayout";
 
 // Public Sync Routes
 import Login from "./pages/Login";
@@ -27,12 +28,15 @@ const Pagamentos = lazy(() => import("./pages/Pagamentos"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
+import { PageHeaderProvider } from "@/context/PageHeaderContext";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 30,
       retry: 1,
+      refetchOnWindowFocus: false, // Performance: evita refetch ao voltar para o app
     },
   },
 });
@@ -45,64 +49,191 @@ const App = () => (
       enableSystem
       disableTransitionOnChange
     >
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true,
-          }}
-        >
-          <AuthProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/recuperar-senha" element={<RecuperarSenha />} />
-              <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+      <PageHeaderProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true,
+            }}
+          >
+            <AuthProvider>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+                <Route path="/redefinir-senha" element={<RedefinirSenha />} />
 
-              {/* Protected routes */}
-              <Route
-                path="/*"
-                element={
-                  <GlobalErrorBoundary>
-                    <Suspense
-                      fallback={
-                        <div className="flex items-center justify-center min-h-screen bg-slate-50">
-                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                        </div>
-                      }
-                    >
-                      <Routes>
-                        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                        <Route path="/fretes" element={<ProtectedRoute><Fretes /></ProtectedRoute>} />
-                        <Route path="/fretes/editar/:id" element={<ProtectedRoute><Fretes /></ProtectedRoute>} />
-                        <Route path="/frota" element={<ProtectedRoute><Frota /></ProtectedRoute>} />
-                        <Route path="/frota/editar/:id" element={<ProtectedRoute><Frota /></ProtectedRoute>} />
-                        <Route path="/motoristas" element={<ProtectedRoute><Motoristas /></ProtectedRoute>} />
-                        <Route path="/motoristas/editar/:id" element={<ProtectedRoute><Motoristas /></ProtectedRoute>} />
-                        <Route path="/fazendas" element={<ProtectedRoute><Fazendas /></ProtectedRoute>} />
-                        <Route path="/fazendas/editar/:id" element={<ProtectedRoute><Fazendas /></ProtectedRoute>} />
-                        <Route path="/custos" element={<ProtectedRoute><Custos /></ProtectedRoute>} />
-                        <Route path="/custos/editar/:id" element={<ProtectedRoute><Custos /></ProtectedRoute>} />
-                        <Route path="/pagamentos" element={<ProtectedRoute><Pagamentos /></ProtectedRoute>} />
-                        <Route path="/pagamentos/editar/:id" element={<ProtectedRoute><Pagamentos /></ProtectedRoute>} />
-                        <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
-                        <Route path="/indicadores" element={<ProtectedRoute><Indicadores /></ProtectedRoute>} />
-                        <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
-                        <Route path="/usuarios/editar/:id" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </Suspense>
-                  </GlobalErrorBoundary>
-                }
-              />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
+                {/* Protected routes with Shared Layout */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <GlobalErrorBoundary>
+                        <MainLayout />
+                      </GlobalErrorBoundary>
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route
+                    path="/"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Dashboard />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/fretes"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Fretes />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/fretes/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Fretes />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/frota"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Frota />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/frota/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Frota />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/motoristas"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Motoristas />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/motoristas/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Motoristas />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/fazendas"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Fazendas />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/fazendas/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Fazendas />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/custos"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Custos />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/custos/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Custos />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/pagamentos"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Pagamentos />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/pagamentos/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Pagamentos />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/relatorios"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Relatorios />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/indicadores"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Indicadores />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/usuarios"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Usuarios />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/usuarios/editar/:id"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Usuarios />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="*"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <NotFound />
+                      </Suspense>
+                    }
+                  />
+                </Route>
+              </Routes>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </PageHeaderProvider>
     </ThemeProvider>
   </QueryClientProvider>
+);
+
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[400px]">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+  </div>
 );
 
 export default App;

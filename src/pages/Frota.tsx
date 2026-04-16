@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable } from "@/components/shared/DataTable";
@@ -74,6 +74,15 @@ const formatVehicleCategory = (vehicleType?: Caminhao["tipo_veiculo"]) => {
 export default function Frota() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Frota",
+      subtitle: "Gestão de veículos e manutenção"
+    });
+  }, [setHeader]);
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [fleetFilter, setFleetFilter] = useState<"all" | "proprio" | "terceiro">("all");
@@ -811,7 +820,7 @@ export default function Frota() {
   ];
 
   return (
-    <MainLayout title="Frota" subtitle="Gestão da frota">
+    <div className="animate-in fade-in duration-500">
       <RefreshingIndicator isRefreshing={isRefreshing} />
       <PageHeader
         title="Frota de Veículos"
@@ -1899,6 +1908,6 @@ export default function Frota() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
@@ -93,6 +93,14 @@ const tipoMotoristaConfig = {
 };
 
 export default function Motoristas() {
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Motoristas",
+      subtitle: "Gestão de motoristas e frotas terceirizadas"
+    });
+  }, [setHeader]);
   const [documentoTipo, setDocumentoTipo] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -478,7 +486,7 @@ export default function Motoristas() {
   }, [fretesApi, selectedMotorista]);
 
   return (
-    <MainLayout title="Motoristas" subtitle="Gestão de motoristas">
+    <div className="animate-in fade-in duration-500">
       <RefreshingIndicator isRefreshing={isRefreshing} />
       <PageHeader
         title="Motoristas"
@@ -1029,6 +1037,6 @@ export default function Motoristas() {
         onOpenChange={setIsModalOpen}
         editRouteHandledRef={editRouteHandledRef}
       />
-    </MainLayout>
+    </div>
   );
 }

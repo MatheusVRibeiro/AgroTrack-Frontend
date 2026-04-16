@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { usePageHeaderActions } from "@/context/PageHeaderContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PeriodoFilter } from "@/components/shared/PeriodoFilter";
 import { FilterBar } from "@/components/shared/FilterBar";
@@ -59,8 +59,19 @@ import { useAtualizarFazenda, useCriarFazenda, useDeletarFazenda, useFazendas } 
 import { diffObjects } from "@/lib/diff";
 import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
 import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Fazendas() {
+  const queryClient = useQueryClient();
+  const { setHeader } = usePageHeaderActions();
+
+  useEffect(() => {
+    setHeader({
+      title: "Fazendas",
+      subtitle: "Gestão de estoques e carregamentos nas fazendas"
+    });
+  }, [setHeader]);
+
   // Gerar opções de safra dinamicamente (últimos 5 anos e próximos 3)
   const gerarOpcoesSafra = () => {
     const anoAtual = new Date().getFullYear();
@@ -629,10 +640,7 @@ export default function Fazendas() {
   };
 
   return (
-    <MainLayout
-      title="Fazendas"
-      subtitle="Gestão de produção por fazenda"
-    >
+    <div className="animate-in fade-in duration-500">
       <RefreshingIndicator isRefreshing={isRefreshing} />
       {isLoading ? (
         <div className="flex items-center justify-center h-96">
@@ -1872,6 +1880,6 @@ export default function Fazendas() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </div>
   );
 }
