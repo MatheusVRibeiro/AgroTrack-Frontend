@@ -5,11 +5,13 @@ import {
   clearSessionStorage,
   clearPersistedAuthData,
   getPersistedAuthData,
-  setTokens,
   setUserData,
   getUserData,
   migrateFromLocalStorage,
   setPersistedAuthData,
+  isSessionExpired,
+  updateLastActivity,
+  PersistedAuthData,
 } from "@/auth/session";
 import type { ApiResponse, User } from "@/types";
 
@@ -33,73 +35,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Migra tokens antigos do localStorage (limpeza de segurança)
+    // Migra tokens antigos
     migrateFromLocalStorage();
 
-    // Obtém dados do usuário da sessão temporária ou da sessão lembrada
-    const storedUser = getUserData<User>() || getPersistedAuthData<{ user?: User }>()?.user;
-
-    if (storedUser) {
-      try {
-        setUser(storedUser);
-        const persistedAuth = getPersistedAuthData<{ user?: User; accessToken?: string; refreshToken?: string }>();
-        if (persistedAuth?.accessToken) {
-          setTokens(persistedAuth.accessToken, persistedAuth.refreshToken);
-          setUserData(storedUser);
-        }
-      } catch {
-        clearSessionStorage();
-      }
+    // Verificação de expiração por inatividade (7 dias)
+    if (isSessionExpired()) {
+      clearSessionStorage();
+      setIsLoading(false);
+      return;
     }
-    setIsLoading(false);
+
+    const initAuth = async () => {
+      try {
+        // Tenta verificar identidade via cookie HttpOnly (Who am I)
+        const res = await authService.me();
+        
+        if (res.success && res.data) {
+          const authenticatedUser = res.data;
+          setUser(authenticatedUser);
+          setUserData(authenticatedUser);
+          updateLastActivity();
+        } else {
+          // Se falhou, mas tínhamos dados no sessionStorage, limpa
+          if (getUserData()) {
+            clearSessionStorage();
+          }
+        }
+      } catch (err) {
+        console.error("Erro na inicialização do auth:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
   const login = async (email: string, password: string, options?: LoginOptions): Promise<ApiResponse<any>> => {
     setIsLoading(true);
 
-    // Try backend authentication first
     try {
       const res = await authService.login(email, password);
 
       if (res.success && res.data) {
-        const { user, token } = res.data;
-        const rememberMe = options?.rememberMe === true;
+        const { user } = res.data;
+        // Padrão é lembrar-me para persistência de 7 dias
+        const rememberMe = options?.rememberMe !== false;
 
         setUser(user);
 
         if (rememberMe) {
-          setUserData(user);
+          // Persiste apenas dados não-sensíveis para UX (tokens estão seguros no cookie)
           setPersistedAuthData({
             user,
-            accessToken: token,
-            refreshToken: res.data.refreshToken,
+            lastActivity: Date.now(),
           });
+          setUserData(user);
         } else {
           clearPersistedAuthData();
           setUserData(user);
-        }
-
-        // Armazena tokens APENAS em memória (seguro contra XSS)
-        if (token) {
-          setTokens(token, res.data.refreshToken);
         }
 
         setIsLoading(false);
         return res;
       }
 
-      // If backend returned an explicit failure, return it to the caller so UI can react to status/message
       setIsLoading(false);
       return res;
     } catch (e) {
-      // Authentication failed (network or server error)
+      console.error("Erro no login:", e);
     }
 
     setIsLoading(false);
     return { success: false, data: null, message: "Credenciais inválidas", status: 401 };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      // Avisar o backend para limpar os cookies HttpOnly
+      await authService.logout(); 
+    } catch { /* noop */ }
+    
     setUser(null);
     clearSessionStorage();
     clearPersistedAuthData();
@@ -128,3 +144,5 @@ export function useAuth() {
   }
   return context;
 }
+
+

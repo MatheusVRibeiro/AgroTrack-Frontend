@@ -49,7 +49,8 @@ const shouldSkipRefresh = (config?: InternalAxiosRequestConfig) => {
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Lê o token da memória (não mais do localStorage)
+    // Se tivermos um token em memória (ex: logo após o login), usamos no header.
+    // Caso contrário, o browser enviará o cookie HttpOnly automaticamente se withCredentials: true
     const token = getAccessToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -78,8 +79,8 @@ api.interceptors.response.use(
       responseMessage?.toLowerCase().includes("use post /login") ||
       responseMessage?.toLowerCase().includes("use post /auth/login");
 
-    // Se for erro de autenticação (não importa o status), redirecionar para login
-    if (isAuthError && !shouldSkipRefresh(originalRequest)) {
+    // Se for erro de autenticação e já tentamos o refresh (ou é rota de login), redirecionar
+    if (isAuthError && shouldSkipRefresh(originalRequest)) {
       redirectToLoginAfterSessionExpiration();
       return Promise.reject(error);
     }
@@ -92,27 +93,21 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Lê o refresh token da memória (não mais do localStorage)
-    const storedRefreshToken = getRefreshToken();
-    if (!storedRefreshToken) {
-      redirectToLoginAfterSessionExpiration();
-      return Promise.reject(error);
-    }
-
+    // Tentar refresh token
     originalRequest._retry = true;
 
     if (!refreshPromise) {
+      // Note: O refresh token agora está no cookie HttpOnly, então não passamos valor aqui.
+      // O axios enviará o cookie automaticamente por causa do withCredentials: true
       refreshPromise = authService
-        .refreshToken(storedRefreshToken)
+        .refreshToken()
         .then((res: any) => {
           if (!res.success || !res.data?.token) {
             throw new Error(res.message || SESSION_EXPIRED_MESSAGE);
           }
 
-          // Armazena os novos tokens na memória
-          if (res.data.refreshToken) {
-            setTokens(res.data.token, res.data.refreshToken);
-          } else {
+          // Armazena o novo access token na memória (opcional se o backend usar apenas cookies)
+          if (res.data.token) {
             setAccessToken(res.data.token);
           }
           return res.data.token;
@@ -137,5 +132,6 @@ api.interceptors.response.use(
     }
   }
 );
+
 
 export default api;

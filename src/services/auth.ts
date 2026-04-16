@@ -88,9 +88,9 @@ export async function login(email: string, senha: string): Promise<ApiResponse<L
   }
 }
 
-export async function refreshToken(refreshTokenValue: string): Promise<ApiResponse<{ token: string; refreshToken?: string }>> {
+export async function refreshToken(refreshTokenValue?: string): Promise<ApiResponse<{ token: string; refreshToken?: string }>> {
   try {
-    const res = await api.post<BackendRefreshResponse>("/auth/refresh", { refreshToken: refreshTokenValue });
+    const res = await api.post<BackendRefreshResponse>("/auth/refresh", refreshTokenValue ? { refreshToken: refreshTokenValue } : {});
 
     if (res.data.success && res.data.token) {
       return {
@@ -231,5 +231,57 @@ export async function resetPassword(
       message = err;
     }
     return { success: false, data: null, message, status };
+  }
+}
+
+/**
+ * Verifica a identidade do usuário atual baseado nos cookies da sessão.
+ */
+export async function me(): Promise<ApiResponse<User>> {
+  try {
+    const res = await api.get<{ success: boolean; usuario: BackendUsuario }>("/auth/me");
+
+    if (res.data.success && res.data.usuario) {
+      const { usuario } = res.data;
+      const mappedUser: User = {
+        id: usuario.id,
+        name: usuario.nome,
+        email: usuario.email,
+        role: usuario.role ?? "admin",
+      };
+
+      return {
+        success: true,
+        data: mappedUser,
+        status: res.status,
+      };
+    }
+
+    return {
+      success: false,
+      data: null,
+      message: "Sessão inválida",
+      status: res.status,
+    };
+  } catch (err: unknown) {
+    let message = "Erro ao verificar sessão";
+    let status: number | undefined = undefined;
+    if (isAxiosError(err)) {
+      message = err.response?.data?.message ?? err.message ?? message;
+      status = err.response?.status;
+    }
+    return { success: false, data: null, message, status };
+  }
+}
+
+/**
+ * Realiza o logout no servidor (limpa cookies HttpOnly).
+ */
+export async function logout(): Promise<ApiResponse<null>> {
+  try {
+    const res = await api.post("/auth/logout");
+    return { success: true, data: null, status: res.status };
+  } catch (err: unknown) {
+    return { success: false, data: null, message: "Erro logout", status: 500 };
   }
 }
