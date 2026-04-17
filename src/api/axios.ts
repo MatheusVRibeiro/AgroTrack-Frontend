@@ -6,6 +6,7 @@ import {
   getRefreshToken,
   setAccessToken,
   setTokens,
+  getPersistedAuthData,
 } from "@/auth/session";
 import * as authService from "@/services/auth";
 import { toast } from "sonner";
@@ -33,12 +34,19 @@ const getFriendlyErrorMessage = (error: AxiosError) => {
 };
 
 const redirectToLoginAfterSessionExpiration = () => {
+  const hadSession = !!getPersistedAuthData()?.lastActivity;
   clearSessionStorage();
-  toast.error(SESSION_EXPIRED_MESSAGE);
-  const targetUrl = `/login?session=expired&message=${encodeURIComponent(SESSION_EXPIRED_MESSAGE)}`;
 
-  if (window.location.pathname !== "/login") {
-    window.location.assign(targetUrl);
+  if (hadSession) {
+    toast.error(SESSION_EXPIRED_MESSAGE);
+    const targetUrl = `/login?session=expired&message=${encodeURIComponent(SESSION_EXPIRED_MESSAGE)}`;
+    if (window.location.pathname !== "/login") {
+      window.location.assign(targetUrl);
+    }
+  } else {
+    if (window.location.pathname !== "/login") {
+      window.location.assign("/login");
+    }
   }
 };
 
