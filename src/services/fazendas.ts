@@ -84,10 +84,10 @@ const normalizePayloadToBackend = (payload: CriarFazendaPayload | Partial<CriarF
   return normalized;
 };
 
-const listarFazendas = async (params?: { page?: number; limit?: number }): Promise<ApiResponse<Fazenda[]>> => {
+const listarFazendas = async (params?: { page?: number; limit?: number; search?: string }): Promise<ApiResponse<Fazenda[]>> => {
   try {
-    const { page = 1, limit = 10000 } = params ?? {};
-    const res = await api.get("/fazendas", { params: { page, limit } });
+    const { page = 1, limit = 10000, search } = params ?? {};
+    const res = await api.get("/fazendas", { params: { page, limit, search } });
     const data = normalizeListResponse(res.data.data || res.data);
     return { success: true, data, meta: res.data.meta, status: res.status };
   } catch (err: unknown) {

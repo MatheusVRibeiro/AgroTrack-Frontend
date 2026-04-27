@@ -61,6 +61,11 @@ import { ModalSubmitFooter } from "@/components/shared/ModalSubmitFooter";
 import { FieldError, fieldErrorClass } from "@/components/shared/FieldError";
 import { useQueryClient } from "@tanstack/react-query";
 
+const getSafraAtual = () => {
+  const anoAtual = new Date().getFullYear();
+  return `${anoAtual - 1}/${anoAtual}`;
+};
+
 export default function Fazendas() {
   const queryClient = useQueryClient();
   const { setHeader } = usePageHeaderActions();
@@ -89,28 +94,32 @@ export default function Fazendas() {
   const [search, setSearch] = useState("");
 
   // Query para listar fazendas - server-side
-  const { data: fazendasResponse, isLoading } = useFazendas({ 
-    page: currentPage, 
-    limit: itemsPerPage, 
-    search 
+  const { data: fazendasResponse, isLoading } = useFazendas({
+    page: currentPage,
+    limit: itemsPerPage,
+    search
   });
+
+  // Query para listar TODAS as fazendas para os cards de KPI
+  const { data: allFazendasResponse } = useFazendas({ limit: 10000 });
+  const allFazendas = allFazendasResponse?.data || [];
 
   const fazendas: Fazenda[] = fazendasResponse?.data || [];
   const serverMeta = fazendasResponse?.meta as any;
   const totalFromServer = serverMeta?.total ?? fazendas.length;
   const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
 
-  // Hook para filtro de período (usa created_at ou data_atualizacao)
+  // Hook para filtro de período usando TODAS as fazendas para o KPI
   const {
     tipoVisualizacao,
     selectedPeriodo,
     periodosDisponiveis,
-    dadosFiltrados: fazendasFiltradas,
+    dadosFiltrados: allFazendasFiltradas,
     formatPeriodoLabel,
     setTipoVisualizacao,
     setSelectedPeriodo,
   } = usePeriodoFilter({
-    data: fazendas,
+    data: allFazendas,
     getDataField: (f) => f.updated_at || f.created_at || new Date().toISOString(),
   });
 
@@ -152,7 +161,7 @@ export default function Fazendas() {
     faturamento_total: 0,
     preco_por_tonelada: 0,
     peso_medio_saca: 25,
-    safra: "2024/2025",
+    safra: getSafraAtual(),
     colheita_finalizada: false,
   });
   type FormErrors = {
@@ -191,7 +200,7 @@ export default function Fazendas() {
       faturamento_total: 0,
       preco_por_tonelada: 0,
       peso_medio_saca: 25,
-      safra: "2024/2025",
+      safra: getSafraAtual(),
       colheita_finalizada: false,
     });
     setIsEditing(false);
@@ -448,7 +457,7 @@ export default function Fazendas() {
 
     doc.setFontSize(9);
     doc.text(`Emitido em ${new Date().toLocaleDateString("pt-BR")}`, 196, 20, { align: "right" });
-    
+
     // Status visual
     const statusLabel = fazenda.colheita_finalizada ? "FINALIZADA" : "EM ANDAMENTO";
     doc.setFillColor(fazenda.colheita_finalizada ? 22 : 234, fazenda.colheita_finalizada ? 163 : 179, fazenda.colheita_finalizada ? 74 : 8);
@@ -471,11 +480,11 @@ export default function Fazendas() {
 
     doc.setFontSize(9);
     doc.setTextColor(71, 85, 105);
-    
+
     y += 7;
     doc.setFont("helvetica", "normal"); doc.text("Fazenda:", 18, y);
     doc.setFont("helvetica", "bold"); doc.text(fazenda.fazenda, 35, y);
-    
+
     doc.setFont("helvetica", "normal"); doc.text("Proprietário:", 100, y);
     doc.setFont("helvetica", "bold"); doc.text(fazenda.proprietario || "-", 122, y);
 
@@ -501,12 +510,12 @@ export default function Fazendas() {
     const renderCard = (x: number, title: string, value: string, subtitle: string, rgbColor: number[]) => {
       doc.setFillColor(rgbColor[0], rgbColor[1], rgbColor[2]);
       doc.roundedRect(x, y, 58, 22, 2, 2, "F");
-      
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
       doc.text(title, x + 4, y + 6);
-      
+
       doc.setFontSize(14);
       doc.setTextColor(30, 41, 59);
       doc.text(value, x + 4, y + 14);
@@ -593,7 +602,7 @@ export default function Fazendas() {
     doc.setTextColor(71, 85, 105);
     doc.setFont("helvetica", "normal"); doc.text("Preço Base / Tonelada:", 18, y);
     doc.setFont("helvetica", "bold"); doc.text(`R$ ${(fazenda.preco_por_tonelada ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 53, y);
-    
+
     doc.setFont("helvetica", "normal"); doc.text("Faturamento Base / Ton.:", 100, y);
     doc.setFont("helvetica", "bold"); doc.text(`R$ ${(receita / (fazenda.total_toneladas || 1)).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} / ton`, 140, y);
 
@@ -605,7 +614,7 @@ export default function Fazendas() {
     doc.setTextColor(22, 163, 74); // Green
     doc.setFont("helvetica", "bold"); doc.text(`R$ ${lucroPorSaca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 140, y);
     doc.setTextColor(71, 85, 105); // volta
-    
+
     y += 7;
     doc.setFont("helvetica", "normal"); doc.text("Peso Padrão / Saca:", 18, y);
     doc.setFont("helvetica", "bold"); doc.text(`${fazenda.peso_medio_saca ?? 25} kg`, 52, y);
@@ -613,9 +622,9 @@ export default function Fazendas() {
     doc.setFont("helvetica", "normal"); doc.text("Último Frete Realizado:", 100, y);
     let ultimoFreteTxt = "-";
     if (fazenda.ultimo_frete_data) {
-        ultimoFreteTxt = `${new Date(fazenda.ultimo_frete_data).toLocaleDateString("pt-BR")} ${fazenda.ultimo_frete_motorista ? `(${fazenda.ultimo_frete_motorista})` : ""}`;
+      ultimoFreteTxt = `${new Date(fazenda.ultimo_frete_data).toLocaleDateString("pt-BR")} ${fazenda.ultimo_frete_motorista ? `(${fazenda.ultimo_frete_motorista})` : ""}`;
     } else if (fazenda.ultimo_frete) {
-        ultimoFreteTxt = fazenda.ultimo_frete;
+      ultimoFreteTxt = fazenda.ultimo_frete;
     }
     doc.setFont("helvetica", "bold"); doc.text(ultimoFreteTxt, 137, y);
 
@@ -678,7 +687,7 @@ export default function Fazendas() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-xs md:text-sm font-medium text-muted-foreground">Fazendas no período</p>
-                    <p className="text-2xl md:text-3xl font-bold tracking-tight">{totalFromServer}</p>
+                    <p className="text-2xl md:text-3xl font-bold tracking-tight">{allFazendasFiltradas.length}</p>
                     <p className="text-[11px] md:text-xs text-green-600 flex items-center gap-1">
                       <Sparkles className="h-3 w-3" />
                       Produtoras ativas
@@ -697,7 +706,7 @@ export default function Fazendas() {
                   <div className="space-y-1">
                     <p className="text-xs md:text-sm font-medium text-muted-foreground">Sacas Carregadas</p>
                     <p className="text-2xl md:text-3xl font-bold tracking-tight">
-                      {fazendas
+                      {allFazendasFiltradas
                         .reduce((acc, p) => acc + toNumber(p.total_sacas_carregadas), 0)
                         .toLocaleString("pt-BR")}
                     </p>
@@ -719,7 +728,7 @@ export default function Fazendas() {
                   <div className="space-y-1">
                     <p className="text-xs md:text-sm font-medium text-muted-foreground">Toneladas</p>
                     <p className="text-2xl md:text-3xl font-bold tracking-tight">
-                      {fazendas
+                      {allFazendasFiltradas
                         .reduce((acc, p) => acc + toNumber(p.total_toneladas), 0)
                         .toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                     </p>
@@ -741,7 +750,7 @@ export default function Fazendas() {
                   <div className="space-y-1">
                     <p className="text-xs md:text-sm font-medium text-muted-foreground">Faturamento Total</p>
                     <p className="text-2xl md:text-3xl font-bold tracking-tight text-green-600 dark:text-green-500">
-                      R$ {fazendasFiltradas
+                      R$ {allFazendasFiltradas
                         .reduce((acc, p) => acc + toNumber(p.faturamento_total), 0)
                         .toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
@@ -1333,7 +1342,7 @@ export default function Fazendas() {
                       <SelectValue placeholder="Selecione a mercadoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Amendoim em Casca">Amendoim em Casca</SelectItem>
+                      <SelectItem value="AMENDOIM EM CASCA">AMENDOIM EM CASCA</SelectItem>
                       <SelectItem value="SEMENTE AM CASCA VERDE">SEMENTE AM CASCA VERDE</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1341,7 +1350,7 @@ export default function Fazendas() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="variedade">Variedade/Cor</Label>
+                  <Label htmlFor="variedade">Variedade</Label>
                   <Select
                     value={newProducao.variedade}
                     onValueChange={(value) => setNewProducao({ ...newProducao, variedade: value })}
@@ -1350,8 +1359,8 @@ export default function Fazendas() {
                       <SelectValue placeholder="Selecione a variedade/cor" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Verde">Verde</SelectItem>
-                      <SelectItem value="Seco">Seco</SelectItem>
+                      <SelectItem value="VERDE">VERDE</SelectItem>
+                      <SelectItem value="SECO">SECO</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

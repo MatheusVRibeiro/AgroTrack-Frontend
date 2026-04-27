@@ -15,6 +15,7 @@ import {
   Menu,
   CreditCard,
   ShieldCheck,
+  Sprout,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -35,7 +36,8 @@ const navigation = [
   { name: "Fazendas", href: "/fazendas", icon: Package },
   { name: "Custos", href: "/custos", icon: DollarSign },
   { name: "Pagamentos", href: "/pagamentos", icon: CreditCard },
-  { name: "Relatórios", href: "/relatorios", icon: FileText },
+  // { name: "Relatórios", href: "/relatorios", icon: FileText },
+  { name: "Relatório de Safra", href: "/relatorios/safra", icon: Sprout },
   { name: "Indicadores", href: "/indicadores", icon: TrendingUp },
   { name: "Usuários", href: "/usuarios", icon: ShieldCheck },
 ];

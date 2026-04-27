@@ -23,6 +23,7 @@ const Motoristas = lazy(() => import("./pages/Motoristas"));
 const Fazendas = lazy(() => import("./pages/Fazendas"));
 const Custos = lazy(() => import("./pages/Custos"));
 const Relatorios = lazy(() => import("./pages/Relatorios"));
+const RelatorioSafra = lazy(() => import("./pages/RelatorioSafra"));
 const Indicadores = lazy(() => import("./pages/Indicadores"));
 const Pagamentos = lazy(() => import("./pages/Pagamentos"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
@@ -185,6 +186,14 @@ const App = () => (
                     element={
                       <Suspense fallback={<PageLoader />}>
                         <Relatorios />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/relatorios/safra"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <RelatorioSafra />
                       </Suspense>
                     }
                   />

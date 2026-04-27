@@ -145,15 +145,15 @@ export default function Custos() {
   // Mas como o backend de custos atual não suporta esses filtros query params,
   // mantemos a página buscando page/limit e filtramos localmente por enquanto.
   // A key useCustos já aceita os campos quando o backend suportar.
-  const { data: custosResponse, isLoading } = useCustos({ page, limit: itemsPerPage });
+  const { data: custosResponse, isLoading } = useCustos({ limit: 10000 });
 
   const custos: Custo[] = custosResponse?.data || [];
   const serverMeta = custosResponse?.meta;
-  const totalFromServer = serverMeta?.total ?? custos.length;
-  const totalPagesFromServer = serverMeta?.totalPages ?? Math.ceil(totalFromServer / itemsPerPage);
+  const totalFromServer = custos.length;
+  const totalPagesFromServer = Math.ceil(totalFromServer / itemsPerPage);
   const { data: fretesResponse } = useQuery<ApiResponse<Frete[]>>({
-    queryKey: ["fretes", "preview"],
-    queryFn: () => fretesService.listarFretes({ page: 1, limit: 200 }),
+    queryKey: ["fretes", "all-preview"],
+    queryFn: () => fretesService.listarFretes({ limit: 10000 }),
     staleTime: 1000 * 60 * 10,
   });
 
@@ -617,7 +617,7 @@ export default function Custos() {
   const totalPagesOutros = Math.ceil(outrosItems.length / itemsPerPage);
 
   // Paginação principal (server-side): navega entre páginas do servidor
-  const totalPages = totalPagesFromServer;
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
 
   // Resetar para página 1 quando filtros mudarem
   useEffect(() => {
