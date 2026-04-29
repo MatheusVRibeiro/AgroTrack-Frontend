@@ -85,15 +85,19 @@ export default function RelatorioSafra() {
       });
     }
     const arr = Array.from(s).sort();
-    return arr.length > 0 ? arr : ["Todas"];
+    return ["Todas", ...arr];
   }, [fazendas, fretes]);
 
   // Setar a safra inicial e limpar filtro ao mudar de safra
   useEffect(() => {
-    if (safras.length > 0 && !safraSelecionada) {
-      setSafraSelecionada(safras[safras.length - 1]);
+    if (!isLoading && !safraSelecionada) {
+      if (safras.length > 1) {
+        setSafraSelecionada(safras[safras.length - 1]);
+      } else {
+        setSafraSelecionada("Todas");
+      }
     }
-  }, [safras, safraSelecionada]);
+  }, [safras, isLoading, safraSelecionada]);
 
   useEffect(() => {
     setFazendaFiltro(null);
